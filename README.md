@@ -6,10 +6,6 @@ What's new?
 * Developer tools are included.
 
 More info:
-* Official [site](http://isida-bot.com) 
-* Information about Installation or Update at [WIKI](http://isida-bot.com/wiki)
-* Xmpp conference: isida@conference.jabber.ru or sup@muc.isida-bot.com
+* Information about Installation or Update at [WIKI](https://github.com/xnamed/isida4/wiki)
+* Jabber conference: playroom@conference.jabber.eu.org
 
-------
-
-Copyright 2oo9..2o15 by [diSabler](http://dsy.name) under [GPLv3](http://www.gnu.org/licenses/gpl.txt) Licence
