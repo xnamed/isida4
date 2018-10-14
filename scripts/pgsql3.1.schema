@@ -86,7 +86,8 @@ CREATE INDEX commonoff_rm ON commonoff (room,cmd);
 -- Rooms list
 --
 CREATE TABLE conference (
-	room text unique,
+	bot text,
+	room text,
 	passwd text
 );
 
@@ -109,7 +110,8 @@ CREATE INDEX feed_rt ON feed (room,time);
 -- Hiden rooms
 --
 CREATE TABLE hiden_rooms (
-	room text unique
+	bot text,
+	room text
 );
 
 -- --------------------------------------------------------------------------- --
@@ -125,10 +127,12 @@ CREATE INDEX bot_ignore_p ON bot_ignore (pattern);
 -- Bot Owner
 --
 CREATE TABLE bot_owner (
-	jid text unique
+	bot text,
+	jid text
 );
 
-CREATE INDEX bot_owner_j ON bot_owner (jid);
+CREATE INDEX bot_owner_b ON bot_owner (bot);
+CREATE INDEX bot_owner_bj ON bot_owner (bot,jid);
 
 -- --------------------------------------------------------------------------- --
 -- Logs in rooms

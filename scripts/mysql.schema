@@ -357,7 +357,8 @@ CREATE INDEX commonoff_rm ON commonoff (room(64),cmd(255));
 -- Rooms list
 --
 CREATE TABLE conference (
-	room varchar(255) unique,
+	bot text,
+	room varchar(255),
 	passwd text
 );
 
@@ -381,7 +382,8 @@ CREATE INDEX feed_rt ON feed (room(64),time);
 -- Hiden rooms
 --
 CREATE TABLE hiden_rooms (
-	room varchar(255) unique
+	bot text,
+	room varchar(255)
 );
 
 -- --------------------------------------------------------------------------- --
@@ -397,10 +399,12 @@ CREATE INDEX bot_ignore_p ON bot_ignore (pattern(255));
 -- Bot Owner
 --
 CREATE TABLE bot_owner (
-	jid varchar(255) unique
+	bot text,
+	jid varchar(255)
 );
 
-CREATE INDEX bot_owner_j ON bot_owner (jid(64));
+CREATE INDEX bot_owner_b ON bot_owner (bot);
+CREATE INDEX bot_owner_bj ON bot_owner (bot,jid(64));
 
 -- --------------------------------------------------------------------------- --
 -- Logs in rooms
