@@ -1,0 +1,11 @@
+# File: bot_vcard.yml
+# Description: Example vCard file for auto fill vCard
+
+nickname: "iSida"
+fullname: "iSida Jabber Bot"
+birthday: "2018-08-06"
+title: "iSida developed by xnamed"
+role: "bot"
+url: "http://jabber.eu.org"
+description: "keep calm kurwa."
+photo: "./data/vCard/isida.png"

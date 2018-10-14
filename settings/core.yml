@@ -1,0 +1,106 @@
+### 
+###               Isida-bot Core global configuration file
+###                              v4.1en
+###
+
+###   ===================
+###   CONNECTION SETTINGS
+
+xmpp:
+  ##
+  ## Account #1
+  ## bot JID with resource
+  ##
+  ## "login@server.tld/isida-bot":
+  ##   password: "********"                  
+  ##   enable: true
+    ##
+    ## Proxy / host configuration
+    ##
+    ## proxy:
+    ##   host: "localhost"
+    ##   port: 3128
+    ##   user: "me"
+    ##   password: "secret"
+    ##
+    ## proxy:
+    ##   host: "127.0.0.1"
+    ##   port: 3128
+    ##   user: ""
+    ##   password: """
+    ##
+    ## proxy:
+    ##   host: "localhost"
+    ##   port: 3128
+
+    ## Connection bypassing the resolver
+    ## server: "allports.jabber.ru:443"
+    ##
+    ## Enable ssl (port 5223)
+    ## secure: True
+
+    ## HTTP Proxy
+    ##
+    ## http_proxy:
+    ##   host: "localhost"
+    ##   port: 3128
+    ##   user: "me"
+    ##   password: "secret"
+
+    ## http_proxy:
+    ##   host: "127.0.0.1"
+    ##   port: 3128
+    ##   user: None
+    ##   password: None
+  ##
+  ## Account #2
+  ##
+  "isida-jabber-bot@server.tld/isida-bot":
+    password: "********"
+    enable: true
+  ##
+  ## Account #3
+  ##
+  "test@localhost/Home":
+    password: "********"
+    enable: true
+
+###   ==================================
+###   GENERAL CONFIGURATION FILE ACCOUNT
+
+configuration:
+    - "isida-jabber-bot@server.tld/isida-bot": "./settings/configs/config.yml"
+    - "test@localhost/Home": "./settings/configs/config.yml"
+
+##
+## Bot owner JID
+##
+superadmin: "admin@jabber.eu.org"
+
+###   ==============
+###   DATABASE SETUP
+
+##
+## PostgreSQL
+##
+## base_type: "pgsql"         # database type: pgsql
+## base_name: "isidabot"      # PostgreSQL database name
+## base_user: "isidabot"      # PostgreSQL database user
+## base_host: "localhost"     # PostgreSQL database host
+## base_pass: "******"        # PostgreSQL database password
+## base_port: 5432            # port to connect. standard - 5432
+
+##
+## SQLite3
+##
+base_type: "sqlite3"       # database type: sqlite3
+
+##
+## MySQL
+##
+## base_type: "mysql"        # database type: mysql
+## base_name: "isidabot"     # MySQL database name
+## base_user: "isidabot"     # MySQL database user
+## base_host: "localhost"    # MySQL database host
+## base_pass: "******"       # MySQL database password
+## base_port: 3306           # port to connect. standard - 3306

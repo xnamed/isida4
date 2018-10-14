@@ -43,6 +43,7 @@ import sys
 import time
 import urllib
 import urllib2
+import yaml
 
 import chardet
 import xmpp
@@ -306,8 +307,9 @@ def log_execute(proc, params):
 	except SystemExit: pass
 	except: logging.exception(' [%s] %s' % (timeadd(tuple(time.localtime())),unicode(proc)))
 
-def sender(item):
+def sender(xmpp_jid, item):
 	global message_out, presence_out, iq_out, unknown_out, last_stanza, messages_log
+	xmpp_jid = getRoom(xmpp_jid)
 	last_stanza = unicode(item)
 	if last_stanza[:2] == '<m':
 		message_out += 1
@@ -318,7 +320,7 @@ def sender(item):
 	elif last_stanza[:2] == '<i': iq_out += 1
 	else: unknown_out += 1
 	if time_nolimit: time.sleep(time_nolimit)
-	try: cl.send(item)
+	try: clients[xmpp_jid].send(item)
 	except Exception,SM:
 		pprint(last_stanza,'red')
 		pprint(SM,'red')
@@ -466,10 +468,10 @@ def pprint(*text):
 		fl.write(fbody.encode('utf-8'))
 		fl.close()
 
-def send_presence_all(sm):
+def send_presence_all(xmpp_jid, sm):
 	pr=xmpp.Presence(typ='unavailable')
 	pr.setStatus(sm)
-	sender(pr)
+	sender(xmpp_jid, pr)
 	time.sleep(2)
 
 def errorHandler(text):
@@ -522,14 +524,18 @@ def message_validate(item):
 			for tmp in cn: item = item.replace(tmp,[GT('censor_text')*len(tmp),GT('censor_text')][len(GT('censor_text'))>1])
 	return item
 
-def send_msg(mtype, mjid, mnick, mmessage):
+def send_msg(xmpp_jid, mtype, mjid, mnick, mmessage):
 	global between_msg_last,time_limit
 	if mmessage:
-		mmessage = message_validate(mmessage)
-		mnick = message_validate(mnick)
+		#	<<	xnamed	<<
+		if get_level(xmpp_jid,mjid,mnick)[0] <= 7:
+		#	>>	xnamed	>>
+			mmessage = message_validate(mmessage)
+			mnick = message_validate(mnick)
 		# 1st april joke :)
 		if time.localtime()[1:3] == (4,1) and GT('1st_april_joke'): mmessage = get_joke(mmessage)
 		no_send = True
+		msg_limit = Settings[xmpp_jid]['msg_limit']
 		if len(mmessage) > msg_limit:
 			cnt = 0
 			maxcnt = int(len(mmessage)/msg_limit) + 1
@@ -537,11 +543,11 @@ def send_msg(mtype, mjid, mnick, mmessage):
 			while len(mmsg) > msg_limit and not game_over:
 				tmsg = u'[%s/%s] %s[…]' % (cnt+1,maxcnt,mmsg[:msg_limit])
 				cnt += 1
-				sender(xmpp.Message('%s/%s' % (mjid,mnick), tmsg, 'chat'))
+				sender(xmpp_jid,xmpp.Message('%s/%s' % (mjid,mnick), tmsg, 'chat'))
 				mmsg = mmsg[msg_limit:]
 				time.sleep(time_limit)
 			tmsg = '[%s/%s] %s' % (cnt+1,maxcnt,mmsg)
-			sender(xmpp.Message('%s/%s' % (mjid,mnick), tmsg, 'chat'))
+			sender(xmpp_jid, xmpp.Message('%s/%s' % (mjid,mnick), tmsg, 'chat'))
 			if mtype == 'chat': no_send = None
 			else: mmessage = mmessage[:msg_limit] + u'[…]'
 		if no_send:
@@ -549,7 +555,7 @@ def send_msg(mtype, mjid, mnick, mmessage):
 			else: mjid += '/' + mnick
 			while mmessage[-1:] in ['\n','\t','\r',' ']: mmessage = mmessage[:-1]
 			mmessage = msg_validator(mmessage)
-			if len(mmessage): sender(xmpp.Message(mjid, mmessage, mtype))
+			if len(mmessage): sender(xmpp_jid ,xmpp.Message(mjid, mmessage, mtype))
 
 def os_version_disco():
 	iSys = sys.platform
@@ -603,24 +609,36 @@ def os_version():
 	else: isidaOs = 'unknown'
 	return isidaOs
 
-def caps_and_send(tmp):
+def caps_and_send(xmpp_jid, tmp):
+	xmpp_jid = getRoom(xmpp_jid)
 	tmp.setTag('x', namespace=xmpp.NS_VCARD_UPDATE)
-	tmp.getTag('x', namespace=xmpp.NS_VCARD_UPDATE).setTagData('photo',photo_hash)
-	tmp.setTag('c', namespace=xmpp.NS_CAPS, attrs={'node':capsNode,'ver':capsHash,'hash':'sha-1'})
-	sender(tmp)
+	tmp.getTag('x', namespace=xmpp.NS_VCARD_UPDATE).setTagData('photo',photo_hash[xmpp_jid])
+	tmp.setTag('c', namespace=xmpp.NS_CAPS, attrs={'node':capsNode,'ver':capsHash,'hash':'md5'})
+	sender(xmpp_jid, tmp)
 
-def join(conference,passwd):
+def join(xmpp_jid,conference,passwd):
 	global pres_answer,cycles_used,cycles_unused,current_join
 	id = get_id()
+	gr = getRoom(conference)
+
 	current_join[conference] = id
-	if Settings['status'] == 'online': j = xmpp.Node('presence', {'id': id, 'to': conference}, payload = [xmpp.Node('status', {},[Settings['message']]),\
-																										  xmpp.Node('priority', {},[Settings['priority']])])
-	else: j = xmpp.Node('presence', {'id': id, 'to': conference}, payload = [xmpp.Node('show', {},[Settings['status']]),\
-																		xmpp.Node('status', {},[Settings['message']]),\
-																		xmpp.Node('priority', {},[Settings['priority']])])
+	#	<<	xnamed	<<	#
+	xmpp_jid = getRoom(xmpp_jid)
+	cbot = getRoom(xmpp_jid)
+	status_show, status_message = get_config(gr,'bot_status_show'), get_config(gr,'bot_status_message')
+	if status_show == '': status_show = Settings[cbot]['status']['show']
+	if status_message == '': status_message = Settings[cbot]['status']['text']
+	if status_show == 'online': j = xmpp.Node('presence', {'id': id, 'to': conference}, payload = [xmpp.Node('status', {},[status_message]),\
+																										  xmpp.Node('priority', {},[Settings[cbot]['status']['priority']])])
+	else: j = xmpp.Node('presence', {'id': id, 'to': conference}, payload = [xmpp.Node('show', {},[status_show]),\
+																		xmpp.Node('status', {},[status_message]),\
+																		xmpp.Node('priority', {},[Settings[cbot]['status']['priority']])])
+	#	>>	xnamed	>>	#
 	j.setTag('x', namespace=xmpp.NS_MUC).addChild('history', {'maxchars':'0', 'maxstanzas':'0'})
 	j.getTag('x').setTagData('password', passwd)
-	caps_and_send(j)
+	#	<<	xnamed	<<	#
+	caps_and_send(xmpp_jid, j)
+	#	>>	xnamed	>>	#
 	answered, Error, join_timeout = None, None, 3
 	if is_start: join_timeout_delay = 0.3
 	else: join_timeout_delay = 1
@@ -644,18 +662,18 @@ def join(conference,passwd):
 		current_join.pop(conference)
 	return Error
 
-def leave(conference, sm):
+def leave(xmpp_jid, conference, sm):
 	j = xmpp.Presence(conference, 'unavailable', status=sm)
-	sender(j)
+	sender(xmpp_jid,j)
 
-def muc_filter_action(act,jid,room,reason):
+def muc_filter_action(xmpp_jid,act,jid,room,reason):
 	if act in ['visitor','kick']:
 		nick = get_nick_by_jid(room,getRoom(jid))
-		if nick and act=='visitor': sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'visitor', 'nick':nick},[xmpp.Node('reason',{},reason)])])]))
-		elif nick and act=='kick': sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'none', 'nick':nick},[xmpp.Node('reason',{},reason)])])]))
-		elif not nick and act=='visitor': sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'visitor', 'jid':jid},[xmpp.Node('reason',{},reason)])])]))
-		elif not nick and act=='kick': sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'none', 'jid':jid},[xmpp.Node('reason',{},reason)])])]))
-	elif act=='ban': sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},reason)])])]))
+		if nick and act=='visitor': sender(xmpp_jid, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'visitor', 'nick':nick},[xmpp.Node('reason',{},reason)])])]))
+		elif nick and act=='kick': sender(xmpp_jid, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'none', 'nick':nick},[xmpp.Node('reason',{},reason)])])]))
+		elif not nick and act=='visitor': sender(xmpp_jid, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'visitor', 'jid':jid},[xmpp.Node('reason',{},reason)])])]))
+		elif not nick and act=='kick': sender(xmpp_jid, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'role':'none', 'jid':jid},[xmpp.Node('reason',{},reason)])])]))
+	elif act=='ban': sender(xmpp_jid, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':room},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},reason)])])]))
 	return None
 
 def paste_text(text,room,jid):
@@ -755,14 +773,15 @@ def iqCB(sess,iq):
 	id = iq.getID()
 	if id == None: return None
 	room = unicode(iq.getFrom())
-	if cur_execute_fetchone('select * from bot_owner where jid=%s',(getRoom(room),)): towh = selfjid
-	else: towh = '%s/%s' % (getRoom(room),get_nick_by_jid_res(getRoom(room), selfjid))
+	xmpp_jid=getRoom(unicode(iq.getTo()))
+	if cur_execute_fetchone('select * from bot_owner where jid=%s',(getRoom(room),)): towh = selfjid[xmpp_jid]
+	else: towh = '%s/%s' % (getRoom(room),get_nick_by_jid_res(getRoom(room), selfjid[xmpp_jid]))
 	query = iq.getTag('query')
 	was_request = id in iq_request
-	al,tjid = get_level(getRoom(room),getResourse(room))
+	al,tjid = get_level(xmpp_jid,getRoom(room),getResourse(room))
 	acclvl = al >= 7 and GT('iq_disco_enable')
 	nnj,tjid = False,getRoom(tjid)
-	if room == selfjid: nnj = True
+	if room == selfjid[xmpp_jid]: nnj = True
 	else:
 		for tmp in megabase:
 			if '%s/%s' % tuple(tmp[0:2]) == room:
@@ -772,7 +791,7 @@ def iqCB(sess,iq):
 	c_lang = iq.getAttr('xml:lang')
 	if c_lang: users_locale[room] = c_lang[:2].replace('uk','ua')
 
-	if getServer(Settings['jid']) == room: nnj = True
+	if getServer(xmpp_jid) == room: nnj = True
 
 	if iq.getType()=='error' and was_request:
 		try: er_name = get_tag(unicode(iq),'error').replace('<','').split()[0]
@@ -808,15 +827,15 @@ def iqCB(sess,iq):
 			pprint('!!! IQ-DDOS Detect: %s %s [%s] %s' % (al, room, tjid, qry),'bright_red')
 			return
 		for t in [tmp[2] for tmp in giq_hook if tmp[1] == 'get']:
-			to_send = t(iq,id,room,acclvl,query,towh,al)
+			to_send = t(xmpp_jid,iq,id,room,acclvl,query,towh,al)
 			if to_send:
-				if to_send != True: sender(to_send)
+				if to_send != True: sender(xmpp_jid,to_send)
 				raise xmpp.NodeProcessed
 	elif iq.getType()=='set':
 		for t in [tmp[2] for tmp in giq_hook if tmp[1] == 'set']:
-			to_send = t(iq,id,room,acclvl,query,towh,al)
+			to_send = t(xmpp_jid,iq,id,room,acclvl,query,towh,al)
 			if to_send:
-				if to_send != True: sender(to_send)
+				if to_send != True: sender(xmpp_jid,to_send)
 				raise xmpp.NodeProcessed
 
 def iq_async_clean():
@@ -873,14 +892,14 @@ def remove_ignore():
 					except: pprint('!!! DDOS: Unable find jid %s in ignore list. Perhaps it\'s removed by bot\'s owner!' % tmp,'red')
 		time.sleep(10)
 
-def com_parser(access_mode, nowname, type, room, nick, text, jid):
+def com_parser(xmpp_jid, access_mode, nowname, type, room, nick, text, jid):
 	global last_command, ddos_ignore
 	jjid = getRoom(jid)
 	if ddos_ignore.has_key(jjid): return
 	if last_command[1:7] == [nowname, type, room, nick, text, jid] and time.time() < last_command[7]+GT('ddos_diff')[access_mode]:
 		ddos_ignore[jjid] = [room,nick,time.time()+GT('ddos_limit')[access_mode]]
 		pprint('!!! DDOS Detect: %s %s/%s %s %s' % (access_mode, room, nick, jid, text),'bright_red')
-		send_msg(type, room, nick, L('Warning! Exceeded the limit of sending the same commands. You to ignore for %s.','%s/%s'%(room,nick)) % un_unix(GT('ddos_limit')[access_mode],'%s/%s'%(room,nick)))
+		send_msg(xmpp_jid, type, room, nick, L('Warning! Exceeded the limit of sending the same commands. You to ignore for %s.','%s/%s'%(room,nick)) % un_unix(GT('ddos_limit')[access_mode],'%s/%s'%(room,nick)))
 		return None
 	no_comm = True
 	cof = cur_execute_fetchall('select * from commonoff;')#!!!
@@ -896,10 +915,10 @@ def com_parser(access_mode, nowname, type, room, nick, text, jid):
 			if not_offed and (text.lower() == p1l or text[:len(parse[1])+1].lower() in ['%s '%p1l,'%s\n'%p1l]):
 				pprint('%s %s/%s [%s] %s' % (jid,room,nick,access_mode,text),'bright_cyan')
 				no_comm = None
-				if not parse[3]: thr(parse[2],(type, room, nick, parse[4:]),parse[1])
-				elif parse[3] == 1: thr(parse[2],(type, room, nick),parse[1])
-				elif parse[3] == 2: thr(parse[2],(type, room, nick, text[len(parse[1])+1:]),parse[1])
-				last_command = [access_mode, nowname, type, room, nick, text, jid, time.time()]
+				if not parse[3]: thr(parse[2],(xmpp_jid, type, room, nick, parse[4:]),parse[1])
+				elif parse[3] == 1: thr(parse[2],(xmpp_jid, type, room, nick),parse[1])
+				elif parse[3] == 2: thr(parse[2],(xmpp_jid, type, room, nick, text[len(parse[1])+1:]),parse[1])
+				last_command = [access_mode, nowname, xmpp_jid, type, room, nick, text, jid, time.time()]
 				break
 	return no_comm
 
@@ -908,21 +927,21 @@ def messageCB(sess,mess):
 	message_in += 1
 	type=unicode(mess.getType())
 	room=unicode(mess.getFrom().getStripped())
+	to=unicode(mess.getTo().getStripped())
+	xmpp_jid=getRoom(to)
 	allow_execute = True
-	if getRoom(Settings['jid']) == getRoom(room):
+	if xmpp_jid == getRoom(room):
 		allow_execute = False
 		msg = 'Warning! Self-message detected!'
 		pprint('!!! %s Stanza:\n%s' % (msg,unicode(mess)))
-		own = cur_execute_fetchall('select * from bot_owner;')
-		if own:
-			for ajid in own: send_msg('chat', ajid[0], '', msg)
+		for ajid in bot_admins[xmpp_jid]: send_msg('chat', ajid, '', msg)
 	text=unicode(mess.getBody())
 	id = mess.getID()
 	try: was_send = messages_log.pop(id)
 	except: was_send = None
 	if was_send and type == 'error' and mess.getTag('error',attrs={'code':'500','type':'wait'}):
 		time.sleep(time_limit)
-		sender(was_send)
+		sender(xmpp_jid,was_send)
 		return
 
 	if current_join and room in [getRoom(t) for t in current_join.keys()]:
@@ -950,24 +969,24 @@ def messageCB(sess,mess):
 	nick=mess.getFrom().getResource()
 	if nick != None: nick = unicode(nick)
 	towh=unicode(mess.getTo().getStripped())
-	lprefix = get_local_prefix(room)
+	lprefix = get_local_prefix(xmpp_jid,room)
 	ft = back_text = text
 	rn = '%s/%s' % (room,nick)
-	access_mode,jid = get_level(room,nick)
+	access_mode,jid = get_level(xmpp_jid,room,nick)
 	if not allow_execute: access_mode = -1
-	nowname = get_xnick(room)
-	if '@' not in jid and (jid == 'None' or jid.startswith('j2j.')) and is_owner(room): access_mode = 9
-	if type == 'groupchat' and nick != '' and access_mode >= 0 and jid not in ['None',Settings['jid']]: talk_count(room,jid,nick,text)
+	nowname = get_xnick(xmpp_jid,room)
+	if '@' not in jid and (jid == 'None' or jid.startswith('j2j.')) and is_owner(xmpp_jid,room): access_mode = 9
+	if type == 'groupchat' and nick != '' and access_mode >= 0 and jid not in ['None',xmpp_jid]: talk_count(room,jid,nick,text)
 	if nick != '' and nick != None and nick != nowname and len(text)>1 and text != 'None' and text != to_censore(text,room) and access_mode >= 0 and get_config(getRoom(room),'censor'):
 		cens_text = L('Censored!',rn)
-		lvl = get_level(room,nick)[0]
-		if lvl >= 5 and get_config(getRoom(room),'censor_warning'): send_msg(type,room,nick,cens_text)
+		lvl = get_level(xmpp_jid,room,nick)[0]
+		if lvl >= 5 and get_config(getRoom(room),'censor_warning'): send_msg(xmpp_jid,type,room,nick,cens_text)
 		elif lvl == 4 and get_config(getRoom(room),'censor_action_member') != 'off':
 			act = get_config(getRoom(room),'censor_action_member')
-			muc_filter_action(act,jid,room,cens_text)
+			muc_filter_action(xmpp_jid,act,jid,room,cens_text)
 		elif lvl < 4 and get_config(getRoom(room),'censor_action_non_member') != 'off':
 			act = get_config(getRoom(room),'censor_action_non_member')
-			muc_filter_action(act,jid,room,cens_text)
+			muc_filter_action(xmpp_jid,act,jid,room,cens_text)
 	no_comm = True
 	if text != 'None' and text and access_mode >= 0 and not mess.getSubject():
 		no_comm = True
@@ -980,7 +999,7 @@ def messageCB(sess,mess):
 			text = text[len(lprefix):]
 			is_par = True
 		if type == 'chat': is_par = True
-		if is_par: no_comm = com_parser(access_mode, nowname, type, room, nick, text, jid)
+		if is_par: no_comm = com_parser(xmpp_jid, access_mode, nowname, type, room, nick, text, jid)
 		if no_comm:
 			btl = btext.lower()
 			if base_type == 'mysql': alias = cur_execute_fetchone("select match ,cmd from alias where (room=%s or room=%s) and ( match =%s or %s like concat( match ,' %%')) order by room desc",(room,'*',btl,btl))
@@ -1027,11 +1046,11 @@ def messageCB(sess,mess):
 							ppr = ppr.replace('%{unused}*',' '.join(argzbk))
 
 				if len(ppr) == ppr.count(' '): ppr = ''
-				no_comm = com_parser(access_mode, nowname, type, room, nick, ppr, jid)
+				no_comm = com_parser(xmpp_jid, access_mode, nowname, type, room, nick, ppr, jid)
 
-	thr(msg_afterwork,(mess,room,jid,nick,type,back_text,no_comm,access_mode,nowname),'msg_afterwork')
+	thr(msg_afterwork,(mess,xmpp_jid,room,jid,nick,type,back_text,no_comm,access_mode,nowname),'msg_afterwork')
 
-def msg_afterwork(mess,room,jid,nick,type,back_text,no_comm,access_mode,nowname):
+def msg_afterwork(mess,xmpp_jid,room,jid,nick,type,back_text,no_comm,access_mode,nowname):
 	global topics
 	not_alowed_flood = False
 	subj = unicode(mess.getSubject())
@@ -1055,35 +1074,35 @@ def msg_afterwork(mess,room,jid,nick,type,back_text,no_comm,access_mode,nowname)
 			fp = file(pastepath + filename, 'wb')
 			fp.write(img)
 			fp.close()
-			send_msg(type, room, '', L('Fetched xhtml image: %s%s','%s/%s'%(room,nick)) % (pasteurl,filename))
+			send_msg(xmpp_jid, type, room, '', L('Fetched xhtml image: %s%s','%s/%s'%(room,nick)) % (pasteurl,filename))
 			pprint('*** Fetched xhtml image from %s/%s [%s], size %s, file %s' % (room,nick,jid,len(img),pastepath + filename),'cyan')
 		except: pass
 
-	for tmp in gmessage: not_alowed_flood = tmp(room,jid,nick,type,text) or not_alowed_flood
+	for tmp in gmessage: not_alowed_flood = tmp(xmpp_jid,room,jid,nick,type,text) or not_alowed_flood
 	if no_comm:
 		for tmp in gactmessage: not_alowed_flood = not_alowed_flood or tmp(room,jid,nick,type,text)
 	if not not_alowed_flood and no_comm and text not in ['None','',' '] and not mess.getSubject():
-		if room != selfjid: is_flood = get_config(getRoom(room),'flood') not in ['off',False]
+		if room != selfjid[xmpp_jid]: is_flood = get_config(getRoom(room),'flood') not in ['off',False]
 		else: is_flood = None
-		if selfjid != jid and access_mode >= 0 and (back_text[:len(nowname)+2] == nowname+': ' or back_text[:len(nowname)+2] == nowname+', ' or type == 'chat') and is_flood:
+		if selfjid[xmpp_jid] != jid and access_mode >= 0 and (back_text[:len(nowname)+2] == nowname+': ' or back_text[:len(nowname)+2] == nowname+', ' or type == 'chat') and is_flood:
 			pprint('Send msg human: %s/%s [%s] <<< %s' % (room,nick,type,text),'dark_gray')
-			if len(back_text) > 128: send_msg_human(type, room, nick, L('Too many letters!','%s/%s'%(room,nick)), 'msg_human')
+			if len(back_text) > 128: send_msg_human(xmpp_jid, type, room, nick, L('Too many letters!','%s/%s'%(room,nick)), 'msg_human')
 			else:
 				if back_text[:len(nowname)] == nowname: back_text = back_text[len(nowname)+2:]
 				try:
-					text = getAnswer(type, room, nick, back_text)
-					if text: send_msg_human(type, room, nick, text, 'msg_human')
+					text = getAnswer(type, xmpp_jid, room, nick, back_text)
+					if text: send_msg_human(xmpp_jid, type, room, nick, text, 'msg_human')
 				except: pass
 
-def send_msg_human(type, room, nick, text, th):
+def send_msg_human(xmpp_jid, type, room, nick, text, th):
 	if nick: rn = '%s/%s' % (room,nick)
 	else: rn = room
 	pprint('Send msg human: %s [%s] >>> %s' % (rn,type,text),'dark_gray')
-	thr(send_msg_hmn,(type, room, nick, text),th)
+	thr(send_msg_hmn,(xmpp_jid, type, room, nick, text),th)
 
-def send_msg_hmn(type, room, nick, text):
+def send_msg_hmn(xmpp_jid, type, room, nick, text):
 	time.sleep(len(text)/4.0+random.randint(0,3))
-	send_msg(type, room, nick, text)
+	send_msg(xmpp_jid, type, room, nick, text)
 
 def to_censore(text,room):
 	ccn = []
@@ -1151,6 +1170,7 @@ def presenceCB(sess,mess):
 	to=unicode(mess.getTo())
 	id = mess.getID()
 	tt = int(time.time())
+	xmpp_jid=getRoom(to)
 	if type=='error':
 		try: error_code = mess.getTagAttr('error','code')
 		except: error_code = None
@@ -1173,7 +1193,7 @@ def presenceCB(sess,mess):
 		pres_answer.append((id,error_msg,tt))
 		return
 	elif id != None: pres_answer.append((id,None,tt))
-	if jid == 'None': jid = get_level(room,nick)[1]
+	if jid == 'None': jid = get_level(xmpp_jid,room,nick)[1]
 
 	# Get Caps
 	if '%s|%s' % (role,affiliation) in levl:
@@ -1253,11 +1273,11 @@ def presenceCB(sess,mess):
 				h_action_current = get_config(room,'muc_filter_hash_action_current')
 				if h_action_current != L('off'):
 					pprint('MUC-Filter initial flush by hash: %s %s' % (room,jid),'brown')
-					muc_filter_action(h_action_current,jid,room,L('Deny by hash lock!'))
+					muc_filter_action(xmpp_jid,h_action_current,jid,room,L('Deny by hash lock!'))
 					for tmp in hashes.keys():
 						tmp_room,tmp_nick = tmp.split('/',1)
 						if tmp_room == room and hashes[tmp] == current_hash:
-							tmp_access,tmp_jid = get_level(room,tmp_nick)
+							tmp_access,tmp_jid = get_level(xmpp_jid,room,tmp_nick)
 							if tmp_access <= 3 and tmp_jid != 'None':
 								in_base = cur_execute_fetchall('select sum(sum) from (select sum(age) from age where jid=%s and room=%s union all select %s-time from age where jid=%s and room=%s and status=0) as sum_age;',(getRoom(tmp_jid),room,int(time.time()),getRoom(tmp_jid),room))
 								if not in_base: nmute = True
@@ -1269,12 +1289,12 @@ def presenceCB(sess,mess):
 									else: nmute = False
 								if nmute:
 									pprint('MUC-Filter flush by hash: %s %s' % (room,tmp_jid),'brown')
-									muc_filter_action(h_action_current,tmp_jid,room,L('Deny by hash lock!'))
+									muc_filter_action(xmpp_jid,h_action_current,tmp_jid,room,L('Deny by hash lock!'))
 				lh = [current_hash,[]]
 			last_hash[room] = lh
 
 	if bad_presence: send_msg('groupchat', room, '', L('/me detect bad stanza from %s') % nick)
-	nowname = get_xnick(room.lower())
+	nowname = get_xnick(xmpp_jid,room.lower())
 	not_found,exit_type,exit_message = 0,'',''
 	if type=='unavailable':
 		try: users_locale.pop('%s/%s' % (room,nick))
@@ -1292,8 +1312,8 @@ def presenceCB(sess,mess):
 				if mmb[0]==room and mmb[1]==nick:
 					megabase.remove(mmb)
 					break
-			if to == selfjid and status in ['307','301'] and cur_execute_fetchone('select room from conference where room=%s',('%s/%s' % (room,nick),)):
-				cur_execute('delete from conference where room ilike %s;', ('%s/%%'%getRoom(room),))
+			if to == selfjid[xmpp_jid] and status in ['307','301'] and cur_execute_fetchone('select room from conference where bot=%s and room=%s',(xmpp_jid,'%s/%s' % (room,nick),)):
+				cur_execute('delete from conference where bot=%s and room ilike %s;', (xmpp_jid,'%s/%%'%getRoom(room),))
 				pprint('*** bot was %s %s %s' % (['banned in','kicked from'][status=='307'],room,exit_message),'red')
 				if GT('kick_ban_notify'):
 					ntf_list = GT('kick_ban_notify_jid').replace(',',' ').replace('|',' ').replace(';',' ')
@@ -1302,7 +1322,7 @@ def presenceCB(sess,mess):
 					if len(ntf_list):
 						ntf_msg = [L('banned in'),L('kicked from')][status == '307']
 						ntf_msg = L('Bot was %s %s with reason: %s') % (ntf_msg,room,exit_message)
-						for tmp in ntf_list: send_msg('chat', tmp, '', ntf_msg)
+						for tmp in ntf_list: send_msg(xmpp_jid, 'chat', tmp, '', ntf_msg)
 	else:
 		if reason: exit_message = reason
 		c_lang = mess.getAttr('xml:lang')
@@ -1318,8 +1338,8 @@ def presenceCB(sess,mess):
 			if not not_found: megabase.append([room, nick, role, affiliation, jid])
 	if jid == 'None': jid, jid2 = '<temporary>%s' % nick, 'None'
 	else: jid2, jid = jid, getRoom(jid.lower())
-	for tmp in gpresence: thr(tmp,(room,jid2,nick,type,(text, role, affiliation, exit_type, exit_message, show, priority, not_found, chg_nick)),'presence_afterwork')
-	al = get_level(getRoom(room),nick)[0]
+	for tmp in gpresence: thr(tmp,(xmpp_jid,room,jid2,nick,type,(text, role, affiliation, exit_type, exit_message, show, priority, not_found, chg_nick)),'presence_afterwork')
+	al = get_level(xmpp_jid,getRoom(room),nick)[0]
 	if type == 'subscribe':
 		if al == 9:
 			caps_and_send(xmpp.Presence(room, 'subscribed'))
@@ -1338,13 +1358,13 @@ def presenceCB(sess,mess):
 		nt = '%s %s' % (nick,text)
 		if nt != to_censore(nt,room):
 			cens_text = L('Censored!','%s/%s'%(room,nick))
-			if al >= 5 and get_config(getRoom(room),'censor_warning'): send_msg('groupchat',room,nick,cens_text)
+			if al >= 5 and get_config(getRoom(room),'censor_warning'): send_msg(xmpp_jid,'groupchat',room,nick,cens_text)
 			elif al == 4 and get_config(getRoom(room),'censor_action_member') != 'off':
 				act = get_config(getRoom(room),'censor_action_member')
-				muc_filter_action(act,jid2,getRoom(room),cens_text)
+				muc_filter_action(xmpp_jid,act,jid2,getRoom(room),cens_text)
 			elif al < 4 and get_config(getRoom(room),'censor_action_non_member') != 'off':
 				act = get_config(getRoom(room),'censor_action_non_member')
-				muc_filter_action(act,jid2,getRoom(room),cens_text)
+				muc_filter_action(xmpp_jid,act,jid2,getRoom(room),cens_text)
 	ab = cur_execute_fetchone('select * from age where room=%s and jid=%s and nick=%s',(room, jid, nick))
 	ttext = '%s\n%s\n%s\n%s\n%s' % (role,affiliation,priority,show,text)
 	if ab:
@@ -1444,11 +1464,12 @@ def flush_stats():
 def disconnecter():
 	global bot_exit_type, game_over
 	pprint('--- Restart by disconnect handler! ---','bright_blue')
-	pprint('--- Last stanza ---','bright_blue')
-	pprint(last_stanza,'bright_blue')
-	pprint('-'*19,'blue')
-	game_over, bot_exit_type = True, 'restart'
-	time.sleep(2)
+	if len (clients) == 1:
+		pprint('--- Last stanza ---','bright_blue')
+		pprint(last_stanza,'bright_blue')
+		pprint('-'*19,'blue')
+		game_over, bot_exit_type = True, 'restart'
+		time.sleep(2)
 
 def get_L_(jid):
 	if jid:
@@ -1534,12 +1555,42 @@ def get_array_from_array2(a1,a2):
 		if t[0] in a2: a_res.append(t)
 	return a_res
 
-def self_vcard():
+def self_vcard(xmpp_jid):
 	global iq_request
 	iqid = get_id()
-	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(selfjid)}, payload = [xmpp.Node('vCard', {'xmlns': xmpp.NS_VCARD},[])])
-	iq_request[iqid]=(time.time(),self_vcard_async,[],xmpp.NS_VCARD)
-	sender(i)
+	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(selfjid[xmpp_jid])}, payload = [xmpp.Node('vCard', {'xmlns': xmpp.NS_VCARD},[])])
+	iq_request[iqid]=(time.time(),self_vcard_async,[xmpp_jid],xmpp.NS_VCARD)
+	sender(xmpp_jid, i)
+
+#	<<	xnamed	<<	#
+def fill_vcard(xmpp_jid, vcard_file):
+	global iq_request
+	vcard_config = loadConfig(vcard_file)
+	if not vcard_config: return
+	ext = open(vcard_config['photo'], "rb")
+	id = get_id()
+	photo_data = ext.read().encode('base64')
+	photo_type = image_type(vcard_config['photo'])
+	i = xmpp.Node('iq', {'type': 'set', 'id': id}, payload = [xmpp.Node('vCard', {'xmlns': xmpp.NS_VCARD},\
+																		  [xmpp.Node('NICKNAME', {}, [vcard_config['nickname']]), xmpp.Node('FULLNAME', {}, [vcard_config['fullname']]),\
+																		  xmpp.Node('BDAY', {}, [vcard_config['birthday']]), xmpp.Node('TITLE', {}, [vcard_config['title']]), xmpp.Node('ROLE', {}, [vcard_config['role']]), xmpp.Node('URL', {}, [vcard_config['url']]),  xmpp.Node('DESC', {}, [vcard_config['description']]),\
+																		  xmpp.Node('PHOTO', {}, [xmpp.Node('BINVAL', {},[photo_data]), xmpp.Node('TYPE', {},[photo_type])])])])
+	sender(xmpp_jid, i)
+	time.sleep(2)
+	iqid = get_id()
+	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(selfjid[xmpp_jid])}, payload = [xmpp.Node('vCard', {'xmlns': xmpp.NS_VCARD},[])])
+	iq_request[iqid]=(time.time(),self_vcard_async,[xmpp_jid],xmpp.NS_VCARD)
+	sender(xmpp_jid, i)
+
+def image_type(img):
+	itype = img.split(".")[-1]
+	if itype == ".png": itype = "image/png"
+	elif itype == ".jpg": itype = "image/jepg"
+	elif itype == ".jepg": itype = "image/jepg"
+	elif itype == ".gif": itype = "image/gif"
+	else: itype =  "image"
+	return itype
+#	>>	xnamed	>>	#
 
 def self_vcard_async(is_answ):
 	global photo_hash
@@ -1559,8 +1610,180 @@ def self_vcard_async(is_answ):
 			try:
 				photo_data = get_value_from_array2(data,'PHOTO.BINVAL').decode('base64')
 				photo_hash = hashlib.sha1(photo_data).hexdigest()
-				PT('photo_hash',photo_hash)
+			#	PT('photo_hash',photo_hash)
 			except: pass
+
+#	<<	xnamed	<<	#
+def loadConfig(fpath):
+	if not os.path.isfile(fpath):
+		draw_warning('%s is missed.' % fpath)
+		return False
+	with open(fpath, 'rb') as fd:
+		config = yaml.load(fd)
+		return config
+
+retry_conn = {}
+def retry_connect():
+	global retry_conn
+	while not game_over:
+		if len(retry_conn):
+			tt = time.time()
+			for tmp in retry_conn.keys():
+				if tt > retry_conn[tmp][0]:
+						retry_conn.pop(tmp)
+						pprint('Connection...','yellow')
+						connect_xmpp_client(tmp)
+		time.sleep(GT('reboot_time'))
+
+def connect_clients():
+	for xmpp_jid in config['xmpp']:
+		if config['xmpp'][xmpp_jid]['enable']:
+			conn = connect_xmpp_client(xmpp_jid)
+			if not conn[0]:
+				if conn[1] and conn[1] == '500':
+					draw_warning('configuration path for %s is missed.' % xmpp_jid)
+				elif conn[1] and conn[1] == '401':
+					continue
+				thr(retry_connect,(),'retry_conn')
+
+def connect_xmpp_client(xmpp_jid):
+	bot_jid = getRoom(xmpp_jid)#.lower()
+	try: config_path = config['configuration'][xmpp_jid]
+	except: return (False, '500')
+	bot_config = loadConfig(config_path) 
+	if bot_config: Settings[bot_jid] = bot_config
+	else: return (False, '404')
+	jid = xmpp.JID(xmpp_jid)
+	Settings[bot_jid]['jid'], photo_hash[bot_jid] = xmpp_jid,''
+	if getResourse(jid) in ['None','']: jid = xmpp.JID(xmpp_jid.split('/')[0]+'/my owner is stupid and can not complete the configuration')
+	selfjid[bot_jid] = jid
+	pprint('JID: %s' % unicode(jid),'light_gray')
+	prefix[bot_jid] = bot_config['prefix']
+	bot_admins[bot_jid] = bot_config['admins']
+	for ajid in bot_admins:
+		own = cur_execute_fetchone('select * from bot_owner where bot=%s and jid=%s',(bot_jid,ajid,))
+		if not own:
+			cur_execute('insert into bot_owner values (%s,%s)',(getRoom(xmpp_jid),ajid,))
+	lastnick[bot_jid] = bot_config['options']['nickname']
+
+	confbase = []
+	for defaultConf in bot_config['conference']:
+		try:
+			i = cur_execute_fetchone('select room,passwd from conference where bot=%s and room ilike %s',(bot_jid,'%s/%%'%getRoom(defaultConf),))
+			if not i: raise
+		except:
+			c_room,c_passwd = '%s/%s' % (defaultConf.lower(),bot_config['options']['nickname']),''
+			cur_execute('insert into conference values (%s,%s,%s)',(bot_jid,c_room,c_passwd))
+
+	confbase = cur_execute_fetchall('select room,passwd from conference where bot=%s',(bot_jid,))
+	if confbase: confbase.sort()
+	try:
+		try:
+			Server = (':'.join(config['xmpp'][xmpp_jid]['server'].split(':')[:-1]),config['xmpp'][xmpp_jid]['server'].split(':')[-1])
+			pprint('Trying to connect to %s' % server,'yellow')
+		except: Server,Port = None,5222
+		if debug_xmpppy: cl = xmpp.Client(jid.getDomain(),Port,ENABLE_TLS=ENABLE_TLS)
+		else: cl = xmpp.Client(jid.getDomain(),Port,debug=[],ENABLE_TLS=ENABLE_TLS)
+		try:
+			Proxy = config['xmpp'][xmpp_jid]['proxy']
+			pprint('Using proxy %s' % Proxy['host'],'green')
+		#except NameError: Proxy = None
+		except: Proxy = None
+		try:
+			Secure = config['xmpp'][xmpp_jid]['secure']
+			pprint('Tryins secured connection','cyan')
+	#	except NameError: Secure = None
+		except: Secure = None
+		con_stat = cl.connect(Server,Proxy,Secure,ENABLE_TLS=ENABLE_TLS)
+		if con_stat: connected[bot_jid] = True, pprint('Connected as %s' % con_stat.upper(),'yellow')
+		else: raise
+	except:
+	#	pprint('No connection. Restart in %s sec.' % GT('reboot_time'),'red')
+	#	time.sleep(GT('reboot_time'))
+	#	sys.exit('restart')
+		pprint('No connection. I\'ll retry in %s sec.' % GT('reboot_time'),'red')
+		retry_conn[xmpp_jid] = [time.time()+GT('reboot_time')]
+		return (False, None)
+	auth_type = cl.auth(jid.getNode(), config['xmpp'][xmpp_jid]['password'], jid.getResource(),sasl=ENABLE_SASL)
+	if auth_type: pprint('Authenticated via %s' % auth_type.upper(),'yellow')
+	else:
+		pprint('Authentication error!','red')
+	#	sys.exit('exit')
+		return (False, '401')
+	pprint('Registration Handlers','yellow')
+	cl.RegisterHandler('message',messageCB)
+	cl.RegisterHandler('iq',iqCB)
+	cl.RegisterHandler('presence',presenceCB)
+	cl.RegisterDisconnectHandler(disconnecter)
+	cl.UnregisterDisconnectHandler(cl.DisconnectHandler)
+	clients[getRoom(xmpp_jid)] = cl
+	if GT('show_loading_by_status'):
+		if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=GT('show_loading_by_status_message'), priority=bot_config['status']['priority']))
+		else: caps_and_send(xmpp_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=GT('show_loading_by_status_message'), priority=bot_config['status']['priority']))
+	else:
+		if bot_config['status']['show'] == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=bot_config['status']['text'], priority=bot_config['status']['priority']))
+		else: caps_and_send(xmpp_jid, xmpp.Presence(show=bot_config['status']['show'], status=bot_config['status']['text'], priority=bot_config['status']['priority']))
+
+	if bot_config['vcard']:
+		pprint('Auto fill vcard %s' % bot_config['vcard_file'],'yellow')
+		try: vcard_path = bot_config['vcard_file']
+		except: return (False, '500')
+		fill_vcard(bot_jid, vcard_path)
+	else:
+		pprint('Update self vcard','yellow')
+		self_vcard(bot_jid)
+
+	time.sleep(1)
+	pprint('Wait conference','yellow')
+	time.sleep(0.5)
+	game_over = None
+	#thr(sender_stack,(),'sender')
+	thr(remove_ignore,(),'ddos_remove')
+	cb = []
+	is_start = True
+	lastserver[bot_jid] = getServer(confbase[-1][0].lower())
+	join_percent, join_pers_add = 0, 100.0/len(confbase)
+
+	for tocon in confbase:
+		if tocon[1]: pprint('->- %s | pass: %s' % tocon,'green')
+		else: pprint('->- %s' % tocon[0],'green')
+		if GT('show_loading_by_status_percent'):
+			join_percent += join_pers_add
+			join_status = '%s %s%%' % (GT('show_loading_by_status_message'),int(join_percent))
+			if GT('show_loading_by_status'):
+				if GT('show_loading_by_status_room'): join_status = '%s [%s]' % (join_status,tocon[0])
+				if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=join_status, priority=bot_config['status']['priority']))
+				else: caps_and_send(xmpp_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=bot_config['status']['priority']))
+		baseArg = unicode(tocon[0])
+		if '/' not in baseArg: baseArg += '/%s' % unicode(bot_config['nickname'])
+		zz = join(xmpp_jid, baseArg, tocon[1])
+		while unicode(zz)[:3] == '409' and not game_over:
+			time.sleep(1)
+			baseArg += '_'
+			zz = join(xmpp_jid, baseArg, tocon[1])
+		if zz:
+			pprint('-!- Error "%s" while join in to %s' % (zz,baseArg),'red')
+			if GT('show_loading_by_status'):
+				if GT('show_loading_by_status_room'): join_status = L('Error while join in to %s - %s') % (tocon[0],zz)
+				if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=join_status, priority=bot_config['status']['priority']))
+				else: caps_and_send(xmpp_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=bot_config['status']['priority']))
+		else: pprint('-<- %s' % baseArg,'bright_green')
+		if game_over: break
+	is_start = plugins_reload = None
+	pprint('Joined','white')
+
+	if GT('show_loading_by_status'):
+		if bot_config['status']['show'] == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=bot_config['status']['text'], priority=bot_config['status']['priority']))
+		else: caps_and_send(xmpp_jid, xmpp.Presence(show=bot_config['status']['show'], status=bot_config['status']['text'], priority=bot_config['status']['priority']))
+	return (True, None)
+
+lastnick = {}
+lastserver = {}
+clients = {}
+Settings = {}
+photo_hash = {}
+bot_admins = {}
+#	>>	xnamed	>>	#
 
 # --------------------- Иницилизация переменных ----------------------
 
@@ -1570,8 +1793,8 @@ halt_on_exception = False					# остановка на ошибках
 debug_xmpppy = False				# отладка xmpppy
 debug_console = False				# отладка действий бота
 CommandsLog = None					# логгирование команд
-prefix = '_'						# префикс комманд
-msg_limit = 1000					# лимит размера сообщений
+prefix = {}						# префикс комманд
+#msg_limit = 1000					# лимит размера сообщений
 botName = 'iSida'					# название бота
 botVersionDef = u'4.0'				# версия бота
 disco_config_node = 'http://isida-bot.com/config'
@@ -1594,7 +1817,7 @@ cycles_used,cycles_unused = 0,0		# статистика циклов
 id_count = 0						# номер запроса
 megabase = []						# главная временная база с полной информацией из презенсов
 ignore_owner = None					# исполнять отключенные команды для владельца бота
-configname = 'settings/config.py'	# конфиг бота
+configname = 'settings/core.yml'	# конфиг бота
 topics = {}							# временное хранение топиков
 last_msg_base = {}					# последние сообщения
 last_msg_time_base = {}				# время между последними сообщениями последние сообщения
@@ -1653,8 +1876,14 @@ if is_win32:
 	ctypes.windll.Kernel32.GetStdHandle.restype = ctypes.c_ulong
 	win_console_color = ctypes.windll.Kernel32.GetStdHandle(ctypes.c_ulong(0xfffffff5))
 
-if os.path.isfile(configname): execfile(configname)
+if os.path.isfile('settings/config.py'): execfile('settings/config.py')
+else: errorHandler('%s is missed.' % 'settings/config.py')
+global config
+if os.path.isfile(configname): config = loadConfig(configname)
 else: errorHandler('%s is missed.' % configname)
+
+try: base_type, base_name, base_user, base_host, base_pass, base_port = config['base_type'], config['base_name'], config['base_user'], config['base_host'], config['base_pass'], config['base_port']
+except: base_type = 'sqlite3'
 
 if base_type == 'pgsql':
 	import psycopg2
@@ -1724,8 +1953,8 @@ if os.path.isdir(sm_f):
 else: smiles_dirs, smiles_dirs_case = [], []
 
 logging.basicConfig(filename=LOG_FILENAME,level=logging.DEBUG,)	# включение логгирования
-capsNode = 'http://v4.isida-bot.com'
-god = SuperAdmin.lower()
+capsNode = 'http://jabber.eu.org/isida-dev'
+SuperAdmin = []
 
 pprint('-'*50,'blue')
 if os.path.basename(sys.argv[0]) != 'isida.py': errorHandler('Ugly launch detect! Read wiki!')
@@ -1735,8 +1964,11 @@ elif base_type == 'mysql': pass
 elif base_type == 'sqlite3': pass
 else: errorHandler('Can\'t connect to `%s` base type!' % base_type)
 
-own = cur_execute_fetchall('select * from bot_owner;')
-if not own: cur_execute('insert into bot_owner values (%s)',(SuperAdmin.lower(),))
+for aa in config['superadmin']:
+	SuperAdmin.append(aa)
+	own = cur_execute_fetchone('select * from bot_owner where jid=%s',(aa,))
+	if not own:
+		cur_execute('insert into bot_owner values (%s,%s)',('*',aa,))
 
 pprint('*** Loading localization','white')
 locales,CURRENT_LOCALE = update_locale()
@@ -1787,14 +2019,6 @@ else: starttime = int(time.time())
 sesstime = int(time.time())
 cu_age = []
 close_age_null()
-try:
-	confbase = cur_execute_fetchall('select * from conference;')
-	if confbase: confbase.sort()
-	else: raise
-except:
-	c_room,c_passwd = '%s/%s' % (defaultConf.lower(),Settings['nickname']),''
-	confbase = [(c_room,c_passwd)]
-	cur_execute('insert into conference (room,passwd) values (%s,%s);',(c_room,c_passwd))
 
 censor = []
 
@@ -1814,99 +2038,19 @@ pprint('*** Version: %s' % botVersion,'yellow')
 pprint('*** OS: %s ' % botOs,'yellow')
 pprint('*'*50,'blue')
 pprint('*** (c) 2oo9-%s Disabler Production Lab.' % str(time.localtime()[0]).replace('0','o'),'bright_cyan')
+pprint('*** Developed by xnamed.','bright_cyan')
 
 if float(sys.version[:3]) < 2.7: errorHandler('Required Python >= 2.7')
 
-lastnick = Settings['nickname']
-jid = xmpp.JID(Settings['jid'])
-if getResourse(jid) in ['None','']: jid = xmpp.JID(Settings['jid'].split('/')[0]+'/my owner is stupid and can not complete the configuration')
-selfjid = jid
-pprint('JID: %s' % unicode(jid),'light_gray')
+selfjid = {}
 
 message_exclude_update()
-photo_hash = GT('photo_hash')
-if not photo_hash: photo_hash = ''
 
-try:
-	try:
-		Server = (':'.join(server.split(':')[:-1]),server.split(':')[-1])
-		Port = int(Server[1])
-		pprint('Trying to connect to %s' % server,'yellow')
-	except: Server,Port = None,5222
-	if debug_xmpppy: cl = xmpp.Client(jid.getDomain(),Port,ENABLE_TLS=ENABLE_TLS)
-	else: cl = xmpp.Client(jid.getDomain(),Port,debug=[],ENABLE_TLS=ENABLE_TLS)
-	try:
-		Proxy = proxy
-		pprint('Using proxy %s' % Proxy['host'],'green')
-	except NameError: Proxy = None
-	try:
-		Secure = secure
-		pprint('Tryins secured connection','cyan')
-	except NameError: Secure = None
-	con_stat = cl.connect(Server,Proxy,Secure,ENABLE_TLS=ENABLE_TLS)
-	if con_stat: pprint('Connected as %s' % con_stat.upper(),'yellow')
-	else: raise
-except:
-	pprint('No connection. Restart in %s sec.' % GT('reboot_time'),'red')
-	time.sleep(GT('reboot_time'))
-	sys.exit('restart')
-auth_type = cl.auth(jid.getNode(), Settings['password'], jid.getResource(),sasl=ENABLE_SASL)
-if auth_type: pprint('Authenticated via %s' % auth_type.upper(),'yellow')
-else:
-	pprint('Authentication error!','red')
-	sys.exit('exit')
-pprint('Registration Handlers','yellow')
-cl.RegisterHandler('message',messageCB)
-cl.RegisterHandler('iq',iqCB)
-cl.RegisterHandler('presence',presenceCB)
-cl.RegisterDisconnectHandler(disconnecter)
-cl.UnregisterDisconnectHandler(cl.DisconnectHandler)
-if GT('show_loading_by_status'):
-	if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp.Presence(status=GT('show_loading_by_status_message'), priority=Settings['priority']))
-	else: caps_and_send(xmpp.Presence(show=GT('show_loading_by_status_show'), status=GT('show_loading_by_status_message'), priority=Settings['priority']))
-else:
-	if Settings['status'] == 'online': caps_and_send(xmpp.Presence(status=Settings['message'], priority=Settings['priority']))
-	else: caps_and_send(xmpp.Presence(show=Settings['status'], status=Settings['message'], priority=Settings['priority']))
+cl = {}
+connected = {}
 
-pprint('Update self vcard','yellow')
-self_vcard()
-time.sleep(1)
-pprint('Wait conference','yellow')
-time.sleep(0.5)
-game_over = None
-thr(remove_ignore,(),'ddos_remove')
-cb = []
-is_start = True
-lastserver = getServer(confbase[-1][0].lower())
-join_percent, join_pers_add = 0, 100.0/len(confbase)
-
-for tocon in confbase:
-	if tocon[1]: pprint('->- %s | pass: %s' % tocon,'green')
-	else: pprint('->- %s' % tocon[0],'green')
-	if GT('show_loading_by_status_percent'):
-		join_percent += join_pers_add
-		join_status = '%s %s%%' % (GT('show_loading_by_status_message'),int(join_percent))
-		if GT('show_loading_by_status'):
-			if GT('show_loading_by_status_room'): join_status = '%s [%s]' % (join_status,tocon[0])
-			if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp.Presence(status=join_status, priority=Settings['priority']))
-			else: caps_and_send(xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=Settings['priority']))
-	baseArg = unicode(tocon[0])
-	if '/' not in baseArg: baseArg += '/%s' % unicode(Settings['nickname'])
-	zz = join(baseArg, tocon[1])
-	while unicode(zz)[:3] == '409' and not game_over:
-		time.sleep(1)
-		baseArg += '_'
-		zz = join(baseArg, tocon[1])
-	if zz:
-		pprint('-!- Error "%s" while join in to %s' % (zz,baseArg),'red')
-		if GT('show_loading_by_status'):
-			if GT('show_loading_by_status_room'): join_status = L('Error while join in to %s - %s') % (tocon[0],zz)
-			if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp.Presence(status=join_status, priority=Settings['priority']))
-			else: caps_and_send(xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=Settings['priority']))
-	else: pprint('-<- %s' % baseArg,'bright_green')
-	if game_over: break
-is_start = plugins_reload = None
-pprint('Joined','white')
+game_over = is_start = plugins_reload = None
+connect_clients()
 
 thr(now_schedule,(),'schedule')
 thr(iq_async_clean,(),'async_iq_clean')
@@ -1914,17 +2058,15 @@ thr(presence_async_clean,(),'async_presence_clean')
 try: thr(bomb_random,(),'bomb_random')
 except: pass
 
-if GT('show_loading_by_status'):
-	if Settings['status'] == 'online': caps_and_send(xmpp.Presence(status=Settings['message'], priority=Settings['priority']))
-	else: caps_and_send(xmpp.Presence(show=Settings['status'], status=Settings['message'], priority=Settings['priority']))
-
 while 1:
 	try:
 		while not game_over:
-			cyc = cl.Process(1)
-			if str(cyc) == 'None': cycles_unused += 1
-			elif int(str(cyc)): cycles_used += 1
-			else: cycles_unused += 1
+			for xmpp_jid in clients.keys():
+				if connected[xmpp_jid]:
+					cyc = clients[xmpp_jid].Process(1)
+					if str(cyc) == 'None': cycles_unused += 1
+					elif int(str(cyc)): cycles_used += 1
+					else: cycles_unused += 1
 			if plugins_reload:
 				from isida import update as isida_update
 				isida_update(get_repo())
@@ -1963,18 +2105,23 @@ while 1:
 		atempt_to_shutdown(False)
 		sys.exit(bot_exit_type)
 
-	except KeyboardInterrupt: atempt_to_shutdown_with_reason(L('Shutdown by CTRL+C...'),0,'exit',False)
+	except KeyboardInterrupt:
+		for xmpp_jid in clients: atempt_to_shutdown_with_reason(xmpp_jid,L('Shutdown by CTRL+C...'),0,'exit',False)
+		sys.exit('exit')
 
-	except xmpp.SystemShutdown: atempt_to_shutdown_with_reason(L('System Shutdown. Trying to restart in %s sec.') % GT('reboot_time'),GT('reboot_time'),'restart',False)
+	except xmpp.SystemShutdown:
+		for xmpp_jid in clients: atempt_to_shutdown_with_reason(xmpp_jid,L('System Shutdown. Trying to restart in %s sec.') % GT('reboot_time'),GT('reboot_time'),'restart',False)
 
-	except psycopg2.InterfaceError: atempt_to_shutdown_with_reason(L('Interface error! Trying to restart in %s sec.') % int(GT('reboot_time')/4),int(GT('reboot_time')/4),'restart',False)
+	except psycopg2.InterfaceError:
+		for xmpp_jid in clients: atempt_to_shutdown_with_reason(xmpp_jid,L('Interface error! Trying to restart in %s sec.') % int(GT('reboot_time')/4),int(GT('reboot_time')/4),'restart',False)
 
 	except Exception, SM:
 		try: SM = str(SM)
 		except: SM = unicode(SM)
 		pprint('*** Error *** %s ***' % SM,'red')
 		logging.exception(' [%s] ' % timeadd(tuple(time.localtime())))
-		if 'parsing finished' in SM.lower() or 'database is locked' in SM.lower(): atempt_to_shutdown_with_reason(L('Critical error! Trying to restart in %s sec.') % int(GT('reboot_time')/4),GT('reboot_time')/4,'restart',True)
+		if 'parsing finished' in SM.lower() or 'database is locked' in SM.lower():
+			for xmpp_jid in clients: atempt_to_shutdown_with_reason(xmpp_jid,L('Critical error! Trying to restart in %s sec.') % int(GT('reboot_time')/4),GT('reboot_time')/4,'restart',True)
 		if halt_on_exception: raise
 
 # The end is near!

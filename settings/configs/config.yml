@@ -1,0 +1,61 @@
+
+
+## Setting status
+## Text: is status text
+## Show: online, chat, dnd, xa, away, invisible
+## Priority: 0 ... 100
+status:
+  text: "keep calm kurwa"
+  show: "online"
+  priority: 100
+
+## Auto fill vCard
+## Options: true | false
+## Reading file: "./data/vCard/isida-bot@localhost.yml"
+vcard: false
+vcard_file: "./data/vCard/bot_vcard.yml" # path to file
+
+## List conference (is first start)
+conference: 
+  - "playroom@conference.jabber.eu.org"
+  - "as@conference.andrzejszczepaniak.co.uk"
+
+# Admins bot
+# Is list jid admins bot
+admins:
+  - "username@server.tld"
+
+## Commands prefix
+prefix: ","
+
+msg_limit: 2048
+
+current_locale: "en"
+
+## Controlling authorize users contact
+## Action:
+## adding - added user
+## delete - delete user
+## ignore - ignore request
+subscribe: 
+  sub: adding
+  unsub: delete
+
+# Default options conference
+# Simbol, if failed join bot conferense, example: "iSida-Bot_"
+# Maxchars and maxstanzas is options affect on logging conference
+# Counts, is limit simbol in message sending bot
+# Prefix the command
+options:
+  nickname: "Bot"
+  simbol: true
+  simbol_char: "_"
+  maxchars: "10000"
+  maxstanzas: "10"
+  counts: 1000
+  prefix: ","
+  status: 
+    text: "Testing iSida-Bot"
+    show: "online"
+    priority: 33
+  lang: "en"
