@@ -304,7 +304,7 @@ def disco_ext_info_add(i):
 		i.getTag('query').getTag('x',namespace=xmpp.NS_DATA).getTag('field',attrs={'var':t}).setTagData('value',bot_softwareinfo[t])
 	return i
 
-def disco_iq_get(iq,id,room,acclvl,query,towh,al):
+def disco_iq_get(bot,iq,id,room,acclvl,query,towh,al):
 	if iq.getTag(name='query', namespace=xmpp.NS_DISCO_INFO):
 		node=get_tag_item(unicode(query),'query','node')
 		if node.split('#')[0] in ['', disco_config_node, xmpp.NS_COMMANDS] or node in [xmpp.NS_MUC_ROOMS, '%s#%s' % (capsNode,capsHash)]:
@@ -315,7 +315,7 @@ def disco_iq_get(iq,id,room,acclvl,query,towh,al):
 			else: i.setTag('query',namespace=xmpp.NS_DISCO_INFO,attrs={'node':node})
 			if node == '' or node == '%s#%s' % (capsNode,capsHash):
 				i = disco_features_add(i)
-				sender(disco_ext_info_add(i))
+				sender(bot,disco_ext_info_add(i))
 				raise xmpp.NodeProcessed
 			elif node == xmpp.NS_MUC_ROOMS:
 				#i.getTag('query').setTag('feature',attrs={'var':xmpp.NS_MUC_ROOMS})
@@ -373,7 +373,7 @@ def disco_iq_get(iq,id,room,acclvl,query,towh,al):
 			return i
 	return None
 
-def disco_iq_set(iq,id,room,acclvl,query,towh,al):
+def disco_iq_set(bot,iq,id,room,acclvl,query,towh,al):
 	if iq.getTag(name='command', namespace=xmpp.NS_COMMANDS) and acclvl:
 		node=get_tag_item(unicode(iq),'command','node')
 		if get_tag_item(unicode(iq),'command','action') == 'execute' and (node.split('#')[0] in ['', disco_config_node, xmpp.NS_COMMANDS] or node == xmpp.NS_MUC_ROOMS):
@@ -384,7 +384,7 @@ def disco_iq_set(iq,id,room,acclvl,query,towh,al):
 			else: i.setTag('query',namespace=xmpp.NS_DISCO_ITEMS,attrs={'node':node})
 			if node == '':
 				i = disco_features_add(i)
-				sender(disco_ext_info_add(i))
+				sender(bot,disco_ext_info_add(i))
 				raise xmpp.NodeProcessed
 			elif node == xmpp.NS_MUC_ROOMS and GT('iq_show_rooms_disco'):
 				if al == 9: cnf = cur_execute_fetchall("select room from conference;")
@@ -408,7 +408,7 @@ def disco_iq_set(iq,id,room,acclvl,query,towh,al):
 					i=xmpp.Iq(to=room, typ='result')
 					i.setAttr(key='id', val=id)
 					if action == 'cancel': i.setTag('command',namespace=xmpp.NS_COMMANDS,attrs={'status':'canceled', 'node':disco_config_node+tn,'sessionid':id})
-					elif towh == selfjid:
+					elif towh == selfjid[bot]:
 						if get_tag_item(unicode(iq),'x','type') == 'submit':
 							varz = iq.getTag('command').getTag('x')
 							sucess_label,unsucess = True,[]
@@ -574,7 +574,7 @@ def disco_iq_set(iq,id,room,acclvl,query,towh,al):
 				i=xmpp.Iq(to=room, typ='result')
 				i.setAttr(key='id', val=id)
 				if action == 'cancel': i.setTag('command',namespace=xmpp.NS_COMMANDS,attrs={'status':'canceled', 'node':disco_config_node+tn,'sessionid':id})
-				elif towh == selfjid:
+				elif towh == selfjid[bot]:
 					if get_tag_item(unicode(iq),'x','type') == 'submit':
 						varz = iq.getTag('command').getTag('x')
 						sucess_label,unsucess = True,[]
@@ -743,7 +743,7 @@ def smart_sort(item):
 	for t in itm1: itm2.append(item[t[1]])
 	return itm2
 
-def features(type, jid, nick, text):
+def features(bot, type, jid, nick, text):
 	global iq_answer,iq_request
 	text = text.strip()
 	if text == '': where,what = '%s/%s' % (getRoom(jid),nick),''
@@ -758,10 +758,10 @@ def features(type, jid, nick, text):
 				break
 	iqid = get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':where}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_DISCO_INFO},[])])
-	iq_request[iqid]=(time.time(),features_async,[type, jid, nick, what, where],xmpp.NS_DISCO_INFO)
-	sender(i)
+	iq_request[iqid]=(time.time(),features_async,[bot, type, jid, nick, what, where],xmpp.NS_DISCO_INFO)
+	sender(bot,i)
 
-def features_async(type, jid, nick, what, where, is_answ):
+def features_async(bot, type, jid, nick, what, where, is_answ):
 	isa = is_answ[1]	
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
 	else:
@@ -825,16 +825,16 @@ def features_async(type, jid, nick, what, where, is_answ):
 			_hashes = '%s | %s' % (_hash_sha1,_hash_md5)
 			if (what and what.lower() in _hashes.lower()) or not what: msg = '%s\n%s' % (msg, _hashes)
 		else: msg = L('Unable to get features list','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def disco(type, jid, nick, text): disco_r(type, jid, nick, text, True)
-def disco_raw(type, jid, nick, text): disco_r(type, jid, nick, text, False)
+def disco(bot, type, jid, nick, text): disco_r(bot, type, jid, nick, text, True)
+def disco_raw(bot, type, jid, nick, text): disco_r(bot, type, jid, nick, text, False)
 
-def disco_r(type, jid, nick, text, raw_type):
+def disco_r(bot, type, jid, nick, text, raw_type):
 	global iq_answer,iq_request
 	text = text.strip()
 	if text == '':
-		send_msg(type, jid, nick, L('What?','%s/%s'%(jid,nick)))
+		send_msg(bot, type, jid, nick, L('What?','%s/%s'%(jid,nick)))
 		return
 	where = text.lower().split('\n',1)[0].split(' ',1)[0]
 	try: what = text.lower().split('\n',1)[0].split(' ',1)[1]
@@ -843,23 +843,23 @@ def disco_r(type, jid, nick, text, raw_type):
 	except: hm = GT('disco_max_limit')
 	iqid = get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':where}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_DISCO_INFO},[])])
-	iq_request[iqid]=(time.time(),disco_features_async,[type, jid, nick, what, where, hm, raw_type],xmpp.NS_DISCO_INFO)
-	sender(i)
+	iq_request[iqid]=(time.time(),disco_features_async,[bot, type, jid, nick, what, where, hm, raw_type],xmpp.NS_DISCO_INFO)
+	sender(bot,i)
 
-def disco_features_async(type, jid, nick, what, where, hm, raw_type, is_answ):
+def disco_features_async(bot, type, jid, nick, what, where, hm, raw_type, is_answ):
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error':
 		msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
-		send_msg(type, jid, nick, msg)
+		send_msg(bot, type, jid, nick, msg)
 		return
 	else:
 		disco_type = xmpp.NS_MUC in [t.getAttr('var') for t in isa[1].getTag('query',namespace=xmpp.NS_DISCO_INFO).getTags('feature')]
 		iqid = get_id()
 		i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':where}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_DISCO_ITEMS},[])])
-		iq_request[iqid]=(time.time(),disco_async,[type, jid, nick, what, where, hm, disco_type, raw_type, isa[1]],xmpp.NS_DISCO_ITEMS)
-		sender(i)
+		iq_request[iqid]=(time.time(),disco_async,[bot, type, jid, nick, what, where, hm, disco_type, raw_type, isa[1]],xmpp.NS_DISCO_ITEMS)
+		sender(bot,i)
 
-def disco_async(type, jid, nick, what, where, hm, disco_type, raw_type, isa_prev, is_answ):
+def disco_async(bot, type, jid, nick, what, where, hm, disco_type, raw_type, isa_prev, is_answ):
 	if len(is_answ[1]) >= 2 and is_answ[1][1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(is_answ[1][0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
 	else:
 		if disco_type and '@' not in where:
@@ -915,11 +915,11 @@ def disco_async(type, jid, nick, what, where, hm, disco_type, raw_type, isa_prev
 					cnt += 1
 			else: msg = L('Not found.','%s/%s'%(jid,nick))
 	msg = rss_replace(msg)
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def whereis(type, jid, nick, text):
+def whereis(bot, type, jid, nick, text):
 	global iq_request,whereis_lock
-	if whereis_lock: send_msg(type, jid, nick, L('This command in use somewhere else. Please try later.','%s/%s'%(jid,nick)))
+	if whereis_lock: send_msg(bot, type, jid, nick, L('This command in use somewhere else. Please try later.','%s/%s'%(jid,nick)))
 	else:
 		if len(text):
 			text = text.split('\n')
@@ -931,10 +931,10 @@ def whereis(type, jid, nick, text):
 			else: where = 'conference.'+text[1]
 		iqid = get_id()
 		i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':where}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_DISCO_ITEMS},[])])
-		iq_request[iqid]=(time.time(),whereis_async,[type, jid, nick, who, where],xmpp.NS_DISCO_ITEMS)
-		sender(i)
+		iq_request[iqid]=(time.time(),whereis_async,[bot, type, jid, nick, who, where],xmpp.NS_DISCO_ITEMS)
+		sender(bot,i)
 
-def whereis_async(type, jid, nick, who, where, is_answ):
+def whereis_async(bot, type, jid, nick, who, where, is_answ):
 	global iq_request, whereis_answers, whereis_lock
 	isan = unicode(is_answ[1][0])
 	isa = isan.split('<item ')
@@ -942,7 +942,7 @@ def whereis_async(type, jid, nick, who, where, is_answ):
 	for ii in isa[1:]:
 		dname = get_subtag(ii,'name').split('(')[-1][:-1]
 		if dname.isdigit() and dname != '0': djids.append(get_subtag(ii,'jid'))
-	send_msg(type, jid, nick, L('Please wait. Result you will be receive in private message approximately %s %s','%s/%s'%(jid,nick)) % (int(len(djids)*(time_nolimit+0.05)), L('sec.','%s/%s'%(jid,nick))))
+	send_msg(bot, type, jid, nick, L('Please wait. Result you will be receive in private message approximately %s %s','%s/%s'%(jid,nick)) % (int(len(djids)*(time_nolimit+0.05)), L('sec.','%s/%s'%(jid,nick))))
 	curr_id = 'whereis_%s' % get_id()
 	whereis_lock = True
 	wtd = GT('whereis_time_dec')
@@ -952,7 +952,7 @@ def whereis_async(type, jid, nick, who, where, is_answ):
 		iqid = get_id()
 		i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':ii}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_DISCO_ITEMS},[])])
 		iq_request[iqid]=(time.time(),whereis_collect_async,[whereis_id,who],xmpp.NS_DISCO_ITEMS)
-		sender(i)
+		sender(bot,i)
 		if game_over: return
 	while len(whereis_answers[whereis_id]) != len(djids) and not game_over: time.sleep(wtd)
 	if game_over: return
@@ -966,7 +966,7 @@ def whereis_async(type, jid, nick, who, where, is_answ):
 		for i in result: msgg += '\n%s\t%s' % (esc_min(i[0]),esc_min(i[1]))
 	else: msgg = L('nick \"%s\" not found.','%s/%s'%(jid,nick)) % who
 	msg = L('Total conferences: %s, available: %s','%s/%s'%(jid,nick)) % (len(isa)-1, '%s, %s' % (len(djids),msgg))
-	send_msg('chat', jid, nick, msg)
+	send_msg(bot, 'chat', jid, nick, msg)
 	whereis_lock = None
 
 def whereis_collect_async(whereis_id,who,is_answ):

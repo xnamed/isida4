@@ -27,7 +27,7 @@ VCARD_LIMIT_LONG = 256
 VCARD_LIMIT_SHORT = 128
 iq_ping_minimal = GT('timeout')
 
-def iq_iq_get(iq,id,room,acclvl,query,towh,al):
+def iq_iq_get(bot,iq,id,room,acclvl,query,towh,al):
 	if iq.getTag(name='query', namespace=xmpp.NS_VERSION) and GT('iq_version_enable'):
 		pprint('*** iq:version from %s' % unicode(room),'magenta')
 		i=xmpp.Iq(to=room, typ='result')
@@ -73,7 +73,7 @@ def iq_iq_get(iq,id,room,acclvl,query,towh,al):
 		i=xmpp.Iq(to=room, typ='result')
 		i.setAttr(key='id', val=id)
 		i.setTag('query',namespace=xmpp.NS_LAST,attrs={'seconds':str(int(time.time())-starttime)})
-		i.setTagData('query','%s (%s) [%s]' % (Settings['message'],Settings['status'],Settings['priority']))
+		i.setTagData('query','%s (%s) [%s]' % (Settings[bot]['status']['message'],Settings[bot]['status']['status'],Settings[bot]['status']['priority']))
 		return i
 	return None
 
@@ -95,25 +95,25 @@ def get_caps(room,nick):
 	except: msg = None
 	return msg
 
-def noiq_caps(type, jid, nick, text):
+def noiq_caps(bot, type, jid, nick, text):
 	text = [text,nick][text == '']
 	caps = get_caps(jid,text)
 	if not caps: msg = L('I can\'t get caps of %s','%s/%s'%(jid,nick)) % text
 	elif len(caps) == caps.count(' ') + caps.count('\n'): msg = L('%s has empty caps!','%s/%s'%(jid,nick)) % text
 	elif text == nick: msg = L('Your caps is %s','%s/%s'%(jid,nick)) % caps
 	else: msg = L('Caps %s is %s','%s/%s'%(jid,nick)) % (text,caps)
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def iq_vcard(type, jid, nick, text):
+def iq_vcard(bot, type, jid, nick, text):
 	global iq_request
 	if '\n' in text: text,args = text.split('\n',1)
 	else: args = ''
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('vCard', {'xmlns': xmpp.NS_VCARD},[])])
-	iq_request[iqid]=(time.time(),vcard_async,[type, jid, nick, text, args],xmpp.NS_VCARD)
-	sender(i)
+	iq_request[iqid]=(time.time(),vcard_async,[bot, type, jid, nick, text, args],xmpp.NS_VCARD)
+	sender(bot,i)
 
-def vcard_async(type, jid, nick, text, args, is_answ):
+def vcard_async(bot, type, jid, nick, text, args, is_answ):
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
 	else:
@@ -160,16 +160,16 @@ def vcard_async(type, jid, nick, text, args, is_answ):
 					if dd: msg = '%s\n%s' % (L('vCard:','%s/%s'%(jid,nick)),'\n'.join(['%s: %s' % ([L(t[0]),t[0].capitalize()][L(t[0])==t[0]],[u'%s…' % t[1][:VCARD_LIMIT_LONG],t[1]][len(t[1])<VCARD_LIMIT_LONG]) for t in dd]))
 					else: msg = '%s %s' % (L('vCard:','%s/%s'%(jid,nick)),L('Not found!','%s/%s'%(jid,nick)))
 			else: msg = '%s %s' % (L('vCard:','%s/%s'%(jid,nick)),L('Empty!','%s/%s'%(jid,nick)))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def iq_uptime(type, jid, nick, text):
+def iq_uptime(bot, type, jid, nick, text):
 	global iq_request
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_LAST},[])])
-	iq_request[iqid]=(time.time(),uptime_async,[type, jid, nick, text],xmpp.NS_LAST)
-	sender(i)
+	iq_request[iqid]=(time.time(),uptime_async,[bot, type, jid, nick, text],xmpp.NS_LAST)
+	sender(bot,i)
 
-def uptime_async(type, jid, nick, text, is_answ):
+def uptime_async(bot, type, jid, nick, text, is_answ):
 	if not text: text = nick
 	isa = is_answ[1][0]
 	try:
@@ -179,23 +179,23 @@ def uptime_async(type, jid, nick, text, is_answ):
 		up_stat = esc_min(get_tag(isa,'query'))
 		if len(up_stat): msg = '%s // %s' % (msg,up_stat)
 	except: msg = L('I can\'t do it','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def urn_ping(type, jid, nick, text):
+def urn_ping(bot, type, jid, nick, text):
 	global iq_request
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('ping', {'xmlns': xmpp.NS_URN_PING},[])])
-	iq_request[iqid]=(time.time(),ping_async,[type, jid, nick, text],xmpp.NS_URN_PING)
-	sender(i)
+	iq_request[iqid]=(time.time(),ping_async,[bot, type, jid, nick, text],xmpp.NS_URN_PING)
+	sender(bot,i)
 
-def ping(type, jid, nick, text):
+def ping(bot, type, jid, nick, text):
 	global iq_request
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_VERSION},[])])
-	iq_request[iqid]=(time.time(),ping_async,[type, jid, nick, text],xmpp.NS_VERSION)
-	sender(i)
+	iq_request[iqid]=(time.time(),ping_async,[bot, type, jid, nick, text],xmpp.NS_VERSION)
+	sender(bot,i)
 
-def ping_async(type, jid, nick, text, is_answ):
+def ping_async(bot, type, jid, nick, text, is_answ):
 	global iq_ping_minimal
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error' and isa[0] == 'remote-server-not-found': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
@@ -208,22 +208,22 @@ def ping_async(type, jid, nick, text, is_answ):
 		f = '%'+'.0%sf' % p_digits
 		if text in ['',nick]: msg = L('Ping from you %s sec.','%s/%s'%(jid,nick)) % f % fixed_ping
 		else: msg = L('Ping from %s %s sec.','%s/%s'%(jid,nick)) % (text, f % fixed_ping)
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def iq_time(type, jid, nick, text):
-	iq_time_get(type, jid, nick, text, None)
+def iq_time(bot, type, jid, nick, text):
+	iq_time_get(bot, type, jid, nick, text, None)
 
-def iq_time_raw(type, jid, nick, text):
-	iq_time_get(type, jid, nick, text, True)
+def iq_time_raw(bot, type, jid, nick, text):
+	iq_time_get(bot, type, jid, nick, text, True)
 
-def iq_time_get(type, jid, nick, text, mode):
+def iq_time_get(bot, type, jid, nick, text, mode):
 	global iq_request
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_TIME},[])])
-	iq_request[iqid]=(time.time(),time_async,[type, jid, nick, text, mode],xmpp.NS_TIME)
-	sender(i)
+	iq_request[iqid]=(time.time(),time_async,[bot, type, jid, nick, text, mode],xmpp.NS_TIME)
+	sender(bot,i)
 
-def time_async(type, jid, nick, text, mode, is_answ):
+def time_async(bot, type, jid, nick, text, mode, is_answ):
 	if not text: text = nick
 	isa = is_answ[1]
 	if len(isa) == 3:
@@ -232,22 +232,22 @@ def time_async(type, jid, nick, text, mode, is_answ):
 	else: msg = ' '.join(isa)
 	if text == nick: msg = L('Your time is %s','%s/%s'%(jid,nick)) % msg
 	else: msg = L('Time %s is %s','%s/%s'%(jid,nick)) % (text,msg)
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def iq_utime(type, jid, nick, text):
-	iq_utime_get(type, jid, nick, text, None)
+def iq_utime(bot, type, jid, nick, text):
+	iq_utime_get(bot, type, jid, nick, text, None)
 
-def iq_utime_raw(type, jid, nick, text):
-	iq_utime_get(type, jid, nick, text, True)
+def iq_utime_raw(bot, type, jid, nick, text):
+	iq_utime_get(bot, type, jid, nick, text, True)
 
-def iq_utime_get(type, jid, nick, text, mode):
+def iq_utime_get(bot, type, jid, nick, text, mode):
 	global iq_request
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('time', {'xmlns': xmpp.NS_URN_TIME},[])])
-	iq_request[iqid]=(time.time(),utime_async,[type, jid, nick, text, mode],xmpp.NS_URN_TIME)
-	sender(i)
+	iq_request[iqid]=(time.time(),utime_async,[bot, type, jid, nick, text, mode],xmpp.NS_URN_TIME)
+	sender(bot,i)
 
-def utime_async(type, jid, nick, text, mode, is_answ):
+def utime_async(bot, type, jid, nick, text, mode, is_answ):
 	if not text: text = nick
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
@@ -265,20 +265,20 @@ def utime_async(type, jid, nick, text, mode, is_answ):
 			else: msg = L('Time %s is %s','%s/%s'%(jid,nick)) % (text,tstr)
 			if mode: msg = '%s | %s %s' % (msg,isa[0],isa[1])
 		except: msg = '%s %s' % (L('Unknown server answer!','%s/%s'%(jid,nick)),isa[0])
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def iq_version(type, jid, nick, text): iq_version_raw(type, jid, nick, text, False)
+def iq_version(bot, type, jid, nick, text): iq_version_raw(bot, type, jid, nick, text, False)
 
-def iq_version_caps(type, jid, nick, text): iq_version_raw(type, jid, nick, text, True)
+def iq_version_caps(bot, type, jid, nick, text): iq_version_raw(bot, type, jid, nick, text, True)
 
-def iq_version_raw(type, jid, nick, text, with_caps):
+def iq_version_raw(bot, type, jid, nick, text, with_caps):
 	global iq_request
 	who,iqid = get_who_iq(text,jid,nick),get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':who}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_VERSION},[])])
-	iq_request[iqid]=(time.time(),version_async,[type, jid, nick, text, with_caps],xmpp.NS_VERSION)
-	sender(i)
+	iq_request[iqid]=(time.time(),version_async,[bot, type, jid, nick, text, with_caps],xmpp.NS_VERSION)
+	sender(bot,i)
 
-def version_async(type, jid, nick, text, with_caps, is_answ):
+def version_async(bot, type, jid, nick, text, with_caps, is_answ):
 	if not text: text = nick
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
@@ -288,34 +288,34 @@ def version_async(type, jid, nick, text, with_caps, is_answ):
 		if caps: msg += ' || %s' % caps
 	if text in ['',nick]: msg = L('Your version is %s','%s/%s'%(jid,nick)) % msg
 	else: msg = L('Version %s is %s','%s/%s'%(jid,nick)) % (text,msg)
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def iq_stats(type, jid, nick, text):
+def iq_stats(bot, type, jid, nick, text):
 	global iq_request
 	if text == '':
-		send_msg(type, jid, nick, L('What?','%s/%s'%(jid,nick)))
+		send_msg(bot, type, jid, nick, L('What?','%s/%s'%(jid,nick)))
 		return
 	iqid = get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':text}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_STATS},[])])
-	iq_request[iqid]=(time.time(),stats_async_features,[type, jid, nick, text],xmpp.NS_STATS)
-	sender(i)
+	iq_request[iqid]=(time.time(),stats_async_features,[bot, type, jid, nick, text],xmpp.NS_STATS)
+	sender(bot,i)
 
-def stats_async_features(type, jid, nick, text, is_answ):
+def stats_async_features(bot, type, jid, nick, text, is_answ):
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error':
 		msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
-		send_msg(type, jid, nick, msg)
+		send_msg(bot, type, jid, nick, msg)
 	else:
 		try: stats_list = [t.getAttr('name') for t in isa[1].getTag('query',namespace=xmpp.NS_STATS).getTags('stat')]
 		except: stats_list = []
 		if stats_list:
 			iqid = get_id()
 			i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':text}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_STATS},[xmpp.Node('stat', {'name':t},[]) for t in stats_list])])
-			iq_request[iqid]=(time.time(),stats_async,[type, jid, nick, text],xmpp.NS_STATS)
-			sender(i)
-		else: send_msg(type, jid, nick, L('Unavailable!','%s/%s'%(jid,nick)))
+			iq_request[iqid]=(time.time(),stats_async,[bot, type, jid, nick, text],xmpp.NS_STATS)
+			sender(bot,i)
+		else: send_msg(bot, type, jid, nick, L('Unavailable!','%s/%s'%(jid,nick)))
 
-def stats_async(type, jid, nick, text, is_answ):
+def stats_async(bot, type, jid, nick, text, is_answ):
 	isa = is_answ[1]
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
 	else:
@@ -325,7 +325,7 @@ def stats_async(type, jid, nick, text, is_answ):
 			stats_list = ['%s: %s' % (t[0].capitalize(),t[1]) if t[2] in t[0] else '%s: %s %s' % (t[0].capitalize(),t[1],t[2]) for t in stats_list]
 			msg = L('Server statistic: %s\n%s','%s/%s'%(jid,nick)) % (text,'\n'.join(stats_list))
 		else: msg = L('Unavailable!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute, iq_hook
 

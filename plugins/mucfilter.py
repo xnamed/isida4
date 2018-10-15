@@ -28,7 +28,7 @@ muc_filter_events = []
 def muc_pprint(*param):
 	global muc_filter_events,muc_filter_last_notify
 	pprint(*param)
-	if GT('muc_filter_notify'):
+'''	if GT('muc_filter_notify'):
 		_notify_count = GT('muc_filter_notify_count')
 		muc_filter_events = [time.time()] + muc_filter_events[:_notify_count-1]		
 		if len(muc_filter_events) == _notify_count \
@@ -39,9 +39,9 @@ def muc_pprint(*param):
 			muc_filter_events = []
 			_jids = GT('muc_filter_notify_jids').split()
 			for t in _jids:
-				if t.strip(): send_msg('chat', t.strip(), '', 'MUC-Filter notify event!')
+				if t.strip(): send_msg('chat', t.strip(), '', 'MUC-Filter notify event!') '''
 
-def muc_filter_set(iq,id,room,acclvl,query,towh,al):
+def muc_filter_set(bot,iq,id,room,acclvl,query,towh,al):
 	msg_xmpp = iq.getTag('query', namespace=xmpp.NS_MUC_FILTER)
 	if msg_xmpp:
 		msg,mute,mute_type,mute_room = get_tag(unicode(msg_xmpp),'query'),None,'groupchat',room
@@ -52,8 +52,8 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 		if msg[:2] == '<m':
 			if '<body>' in msg and '</body>' in msg:
 				to_nick = getResourse(get_tag_item(msg,'message','to'))
-				tojid = rss_replace(getRoom(get_level(room,to_nick)[1]))
-				skip_owner = is_owner(jid)
+				tojid = rss_replace(getRoom(get_level(bot,room,to_nick)[1]))
+				skip_owner = is_owner(bot,jid) or is_boss(jid)
 				gr = getRoom(room)
 				type = get_tag_item(msg,'message','type')
 				if type == 'chat' and not skip_owner:
@@ -74,7 +74,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						if act != 'off':
 							if cnt >= get_config_int(gr,'muc_filter_mute_repeat'):
 								muc_pprint('MUC-Filter mute repeat action (%s): %s %s [%s]' % (act,gr,jid,cnt),'brown')
-								msg = muc_filter_action(act,jid,room,L('Muted messages count overflow!',rn))
+								msg = muc_filter_action(bot,act,jid,room,L('Muted messages count overflow!',rn))
 							else: mute_msg['%s|%s' % (gr,jid)] = cnt + 1
 						mute,mute_type,mute_room,mute_reason = True,'chat', '%s/%s' % (room,to_nick),L('You couldn\'t send private messages! Don\'t repeat!',rn)
 
@@ -87,7 +87,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						if act != 'off':
 							if cnt >= get_config_int(gr,'muc_filter_mute_repeat'):
 								muc_pprint('MUC-Filter mute repeat action (%s): %s %s [%s]' % (act,gr,jid,cnt),'brown')
-								msg = muc_filter_action(act,jid,room,L('Muted messages count overflow!',rn))
+								msg = muc_filter_action(bot,act,jid,room,L('Muted messages count overflow!',rn))
 							else: mute_msg['%s|%s' % (gr,jid)] = cnt + 1
 						mute,mute_reason = True,L('You couldn\'t send public messages! Don\'t repeat!',rn)
 						
@@ -109,7 +109,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							if act != 'off':
 								if cnt >= get_config_int(gr,'muc_filter_newbie_repeat'):
 									muc_pprint('MUC-Filter mute newbie repeat action (%s): %s %s [%s]' % (act,gr,jid,cnt),'brown')
-									msg = muc_filter_action(act,jid,room,L('Messages count overflow from newbie!',rn))
+									msg = muc_filter_action(bot,act,jid,room,L('Messages count overflow from newbie!',rn))
 								else: newbie_msg['%s|%s' % (gr,jid)] = cnt + 1
 							mute,mute_reason = True,L('Your messages are blocked %ssec. after first join! Please, wait quiet!',rn) % newbie_time
 
@@ -128,7 +128,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 								body = body.replace('\n',' ')
 								msg = msg.replace(get_tag_full(msg,'body'),'<body>%s</body>' % body)
 							elif act == 'mute': mute,mute_reason = True,L('Blocked by content!',rn)
-							else: msg = muc_filter_action(act,jid,room,L('Blocked by content!',rn))
+							else: msg = muc_filter_action(bot,act,jid,room,L('Blocked by content!',rn))
 
 					# Reduce spaces
 					if not mute and msg and get_config(gr,'muc_filter_reduce_spaces_msg') and '  ' in body:
@@ -151,7 +151,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 								for tmp in f: body = body.replace(tmp,[GT('censor_text')*len(tmp),GT('censor_text')][len(GT('censor_text'))>1])
 								msg = msg.replace(get_tag_full(msg,'body'),'<body>%s</body>' % body)
 							elif act == 'mute': mute,mute_reason = True,L('AD-Block!',rn)
-							else: msg = muc_filter_action(act,jid,room,L('AD-Block!',rn))
+							else: msg = muc_filter_action(bot,act,jid,room,L('AD-Block!',rn))
 
 					# Raw AD-Block filter
 					if not mute and msg and need_raw and get_config(gr,'muc_filter_adblock_raw') != 'off':
@@ -165,7 +165,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 								act = get_config(gr,'muc_filter_adblock_raw')
 								muc_pprint('MUC-Filter msg raw adblock (%s): %s [%s] %s' % (act,jid,room,body),'brown')
 								if act == 'mute': mute,mute_reason = True,L('Raw AD-Block!',rn)
-								else: msg = muc_filter_action(act,jid,room,L('Raw AD-Block!',rn))
+								else: msg = muc_filter_action(bot,act,jid,room,L('Raw AD-Block!',rn))
 
 					# Repeat message filter
 					if not mute and msg and get_config(gr,'muc_filter_repeat') != 'off':
@@ -188,7 +188,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 									act = get_config(gr,'muc_filter_repeat')
 									muc_pprint('MUC-Filter msg repeat (%s): %s [%s] %s' % (act,jid,room,body),'brown')
 									if act == 'mute': mute,mute_reason = True,L('Repeat message block!',rn)
-									else: msg = muc_filter_action(act,jid,room,L('Repeat message block!',rn))
+									else: msg = muc_filter_action(bot,act,jid,room,L('Repeat message block!',rn))
 							else: muc_repeat[grj] = 0
 						last_msg_base[grj] = body
 						last_msg_time_base[grj] = time.time()
@@ -206,7 +206,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							act = get_config(gr,'muc_filter_match')
 							muc_pprint('MUC-Filter msg matcher (%s): %s [%s] %s' % (act,jid,room,body),'brown')
 							if act == 'mute': mute,mute_reason = True,L('Match message block!',rn)
-							else: msg = muc_filter_action(act,jid,room,L('Match message block!',rn))
+							else: msg = muc_filter_action(bot,act,jid,room,L('Match message block!',rn))
 
 					# Censor filter
 					need_raw = True
@@ -216,7 +216,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						muc_pprint('MUC-Filter msg censor (%s): %s [%s] %s' % (act,jid,room,body),'brown')
 						if act == 'replace': msg = msg.replace(get_tag_full(msg,'body'),'<body>%s</body>' % esc_max2(to_censore(esc_min2(body),gr)))
 						elif act == 'mute': mute,mute_reason = True,L('Blocked by censor!',rn)
-						else: msg = muc_filter_action(act,jid,room,L('Blocked by censor!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('Blocked by censor!',rn))
 
 					# Raw censor filter
 					if not mute and msg and need_raw and get_config(gr,'muc_filter_censor_raw') != 'off':
@@ -225,7 +225,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							act = get_config(gr,'muc_filter_censor_raw')
 							muc_pprint('MUC-Filter msg raw censor (%s): %s [%s] %s' % (act,jid,room,body),'brown')
 							if act == 'mute': mute,mute_reason = True,L('Blocked by raw censor!',rn)
-							else: msg = muc_filter_action(act,jid,room,L('Blocked by raw censor!',rn))
+							else: msg = muc_filter_action(bot,act,jid,room,L('Blocked by raw censor!',rn))
 
 					# Large message filter
 					if not mute and msg and get_config(gr,'muc_filter_large') != 'off' and len(body) > GT('muc_filter_large_message_size'):
@@ -237,7 +237,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							else: body = L('Large message%s %s',rn) % (u'…',url)
 							msg = msg.replace(get_tag_full(msg,'body'),'<body>%s</body>' % body)
 						elif act == 'mute': mute,mute_reason = True,L('Large message block!',rn)
-						else: msg = muc_filter_action(act,jid,room,L('Large message block!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('Large message block!',rn))
 
 				if mute: msg = unicode(xmpp.Message(to=jid,body=mute_reason,typ=mute_type,frm=mute_room))
 			else: msg = None
@@ -251,7 +251,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 
 			tojid = rss_replace(get_tag_item(msg,'presence','to'))
 			if not tojid: tojid = rn
-			if is_owner(jid): pass
+			if is_owner(bot,jid) or is_boss(jid): pass
 			elif get_config(gr,'muc_filter') and not mute:
 				show = ['online',get_tag(msg,'show')][int('<show>' in msg and '</show>' in msg)]
 				if show not in ['chat','online','away','xa','dnd']: msg = msg.replace(get_tag_full(msg,'show'), '<show>online</show>')
@@ -272,7 +272,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('Deny by history request!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						if get_config(gr,'muc_filter_history_ban'):
 							muc_pprint('MUC-Filter history ban: %s/%s %s' % (gr,nick,jid),'brown')
-							sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},'Banned by empty history at %s' % timeadd(tuple(time.localtime())))])])]))
+							sender(bot, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},'Banned by empty history at %s' % timeadd(tuple(time.localtime())))])])]))
 
 				# Fast join filter
 				if not mute and newjoin and get_config(gr,'muc_filter_fast_join'):
@@ -330,14 +330,14 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						tmp2_server = '%s/%s' % (gr,tmp_server)
 						if act == 'ban' and not server_hash_list.has_key('%s/%s' % (gr,getRoom(jid))):
 							server_hash_list['%s/%s' % (gr,getRoom(jid))] = time.time()
-							sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},'Banned by invalid items at %s' % timeadd(tuple(time.localtime())))])])]))
+							sender(bot, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},'Banned by invalid items at %s' % timeadd(tuple(time.localtime())))])])]))
 						elif act == 'ban server' and tmp_server not in get_config(gr,'muc_filter_validate_ban_server_exception').split() and not server_hash_list.has_key(tmp2_server):
 							server_hash_list[tmp2_server] = time.time()
-							sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':tmp_server},[xmpp.Node('reason',{},'Banned by invalid items at %s' % timeadd(tuple(time.localtime())))])])]))
+							sender(bot, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':tmp_server},[xmpp.Node('reason',{},'Banned by invalid items at %s' % timeadd(tuple(time.localtime())))])])]))
 							tmp_notify = get_config(gr,'muc_filter_validate_ban_server_notify_jid')
 							if len(tmp_notify):
 								for tmp in tmp_notify.split():
-									if len(tmp): send_msg('chat', tmp, '', L('Server %s was banned in %s',rn) % (tmp_server,gr))
+									if len(tmp): send_msg(bot, 'chat', tmp, '', L('Server %s was banned in %s',rn) % (tmp_server,gr))
 
 
 				# Lock by caps
@@ -403,7 +403,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							if get_config(gr,'muc_filter_hash_ban_by_rejoin') and not server_hash.has_key(tmp2_server):
 								if user_hash.has_key('%s/%s' % (gr,getRoom(jid))):
 									user_hash.pop('%s/%s' % (gr,getRoom(jid)))
-									sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},'Banned by hash activity at %s' % timeadd(tuple(time.localtime())))])])]))
+									sender(bot, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':jid},[xmpp.Node('reason',{},'Banned by hash activity at %s' % timeadd(tuple(time.localtime())))])])]))
 									muc_pprint('MUC-Filter ban by hash lock: %s/%s' % (gr,nick),'brown')
 								else: user_hash['%s/%s' % (gr,getRoom(jid))] = time.time()
 							if get_config(gr,'muc_filter_hash_ban_server_by_rejoin'):
@@ -414,12 +414,12 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 									tmp_times = server_hash[tmp2_server]
 									if len(tmp_times) == tmp_rejoins and tmp_times[0]-tmp_times[-1] <= get_config_int(gr,'muc_filter_hash_ban_server_by_rejoin_timeout') and not server_hash_list.has_key(tmp2_server):
 										server_hash_list[tmp2_server] = time.time()
-										sender(xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':tmp_server},[xmpp.Node('reason',{},'Banned by hash activity at %s' % timeadd(tuple(time.localtime())))])])]))
+										sender(bot, xmpp.Node('iq',{'id': get_id(), 'type': 'set', 'to':gr},payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast', 'jid':tmp_server},[xmpp.Node('reason',{},'Banned by hash activity at %s' % timeadd(tuple(time.localtime())))])])]))
 										muc_pprint('MUC-Filter server ban by hash lock: %s %s' % (gr,tmp_server),'brown')
 										tmp_notify = get_config(gr,'muc_filter_hash_ban_server_by_rejoin_notify_jid')
 										if len(tmp_notify):
 											for tmp in tmp_notify.split():
-												if len(tmp): send_msg('chat', tmp, '', L('Server %s was banned in %s',rn) % (tmp_server,gr))
+												if len(tmp): send_msg(bot, 'chat', tmp, '', L('Server %s was banned in %s',rn) % (tmp_server,gr))
 						else: pprint('User hash: %s %s/%s %s' % (current_hash,gr,nick,jid),'white')
 
 				# Blacklist
@@ -462,7 +462,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							msg = msg.replace(get_tag_full(msg,'status'),'<status>%s</status>' % status)
 						elif newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('AD-Block!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						elif act == 'mute': msg,mute = None,True
-						else: msg = muc_filter_action(act,jid,room,L('AD-Block!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('AD-Block!',rn))
 					if fn and msg:
 						need_raw = False
 						act = get_config(gr,'muc_filter_adblock_prs')
@@ -472,7 +472,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							msg = msg.replace(esc_max2(tojid),'%s/%s' % (tojid.split('/',1)[0],nick))
 						elif newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('AD-Block!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						elif act == 'mute': msg,mute = None,True
-						else: msg = muc_filter_action(act,jid,room,L('AD-Block!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('AD-Block!',rn))
 
 				# Raw AD-Block filter
 				if not mute and msg and need_raw and get_config(gr,'muc_filter_adblock_prs_raw') != 'off':
@@ -489,13 +489,13 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						muc_pprint('MUC-Filter raw adblock prs status (%s): %s [%s] %s' % (act,jid,room,status),'brown')
 						if newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('AD-Block!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						elif act == 'mute': msg,mute = None,True
-						else: msg = muc_filter_action(act,jid,room,L('Raw AD-Block!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('Raw AD-Block!',rn))
 					if rawnick and fn and msg:
 						act = get_config(gr,'muc_filter_adblock_prs_raw')
 						muc_pprint('MUC-Filter raw adblock prs nick (%s): %s [%s] %s' % (act,jid,room,nick),'brown')
 						if newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('AD-Block!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						elif act == 'mute': msg,mute = None,True
-						else: msg = muc_filter_action(act,jid,room,L('Raw AD-Block!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('Raw AD-Block!',rn))
 
 				# New Line
 				if not mute and msg and get_config(gr,'muc_filter_newline') != 'off':
@@ -513,7 +513,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							msg = msg.replace(get_tag_full(msg,'status'),'<status>%s</status>' % status)
 						elif newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('Blocked by content!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						elif act == 'mute': msg,mute = None,True
-						else: msg = muc_filter_action(act,jid,room,L('Blocked by content!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('Blocked by content!',rn))
 
 				# Reduce spaces
 				if not mute and msg and get_config(gr,'muc_filter_reduce_spaces_prs') and ('  ' in status or '  ' in nick):
@@ -536,7 +536,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						else: msg = msg.replace(esc_max2(tojid),'%s/%s' % (tojid.split('/',1)[0],to_censore(esc_max2(nick),gr)))
 					elif newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('Blocked by censor!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 					elif act == 'mute': msg,mute = None,True
-					else: msg = muc_filter_action(act,jid,room,L('Blocked by censor!',rn))
+					else: msg = muc_filter_action(bot,act,jid,room,L('Blocked by censor!',rn))
 
 				# Raw censor filter
 				if not mute and msg and need_raw and get_config(gr,'muc_filter_censor_prs_raw') != 'off':
@@ -547,7 +547,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 						muc_pprint('MUC-Filter prs raw censor (%s): %s [%s] %s' % (act,jid,room,nick+'|'+status),'brown')
 						if newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('Blocked by censor!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 						elif act == 'mute': msg,mute = None,True
-						else: msg = muc_filter_action(act,jid,room,L('Blocked by raw censor!',rn))
+						else: msg = muc_filter_action(bot,act,jid,room,L('Blocked by raw censor!',rn))
 
 				# Large status filter
 				if not mute and msg and get_config(gr,'muc_filter_large_status') != 'off' and len(esc_min2(status)) > GT('muc_filter_large_status_size'):
@@ -556,7 +556,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 					if act == 'truncate': msg = msg.replace(get_tag_full(msg,'status'),u'<status>%s…</status>' % esc_max2(esc_min2(status)[:GT('muc_filter_large_status_size')]))
 					elif newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('Large status block!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 					elif act == 'mute': msg,mute = None,True
-					else: msg = muc_filter_action(act,jid,room,L('Large status block!',rn))
+					else: msg = muc_filter_action(bot,act,jid,room,L('Large status block!',rn))
 
 				# Large nick filter
 				if not mute and msg and get_config(gr,'muc_filter_large_nick') != 'off' and len(esc_min2(nick)) > GT('muc_filter_large_nick_size'):
@@ -564,7 +564,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 					if act == 'truncate': msg = msg.replace(esc_max2(tojid),u'%s/%s…' % (tojid.split('/',1)[0],esc_max2(esc_min2(nick)[:GT('muc_filter_large_nick_size')])))
 					elif newjoin: msg,mute = unicode(xmpp.Node('presence', {'from': tojid, 'type': 'error', 'to':jid}, payload = ['replace_it',xmpp.Node('error', {'type': 'auth','code':'403'}, payload=[xmpp.Node('forbidden',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[]),xmpp.Node('text',{'xmlns':'urn:ietf:params:xml:ns:xmpp-stanzas'},[L('Large nick block!',rn)])])])).replace('replace_it',get_tag(msg,'presence')),True
 					elif act == 'mute': msg,mute = None,True
-					else: msg = muc_filter_action(act,jid,room,L('Large nick block!',rn))
+					else: msg = muc_filter_action(bot,act,jid,room,L('Large nick block!',rn))
 
 				# Rejoin filter
 				if not mute and msg and get_config(gr,'muc_filter_rejoin') and newjoin:
@@ -588,7 +588,7 @@ def muc_filter_set(iq,id,room,acclvl,query,towh,al):
 							act = get_config(gr,'muc_filter_repeat_prs')
 							muc_pprint('MUC-Filter status (%s): %s [%s] %s' % (act,jid,room,nick),'brown')
 							if act == 'mute': msg,mute = None,True
-							else: msg = muc_filter_action(act,jid,room,L('Status-flood block!',rn))
+							else: msg = muc_filter_action(bot,act,jid,room,L('Status-flood block!',rn))
 
 		if msg:
 			i=xmpp.Iq(to=room, typ='result')

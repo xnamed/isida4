@@ -1663,7 +1663,7 @@ def connect_xmpp_client(xmpp_jid):
 	for ajid in bot_admins:
 		own = cur_execute_fetchone('select * from bot_owner where bot=%s and jid=%s',(bot_jid,ajid,))
 		if not own:
-			cur_execute('insert into bot_owner values (%s,%s)',(getRoom(xmpp_jid),ajid,))
+			cur_execute('insert into bot_owner values (%s,%s)',(bot_jid,ajid,))
 	lastnick[bot_jid] = bot_config['options']['nickname']
 
 	confbase = []
