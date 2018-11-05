@@ -25,7 +25,7 @@ AGE_DEFAULT_LIMIT = 10
 AGE_MAX_LIMIT = 100
 TIME_OF_LOGGING_JOINS = 1357231720
 
-def join_time_stat(type, jid, nick, text):
+def join_time_stat(bot, type, jid, nick, text):
 	text = text.strip()
 	if text and text.isdigit(): llim = int(text)
 	else:
@@ -38,18 +38,18 @@ def join_time_stat(type, jid, nick, text):
 		tmp = cur_execute_fetchone('select nick from age where room=%s and jid=%s order by status,-time',(jid,t[0]))
 		t_age.append((tmp[0],t[1]))
 	msg = L('Joins statistic:\n%s','%s/%s'%(jid,nick)) % '\n'.join(['%s\t %s%s' % (t[0],['','~'][t[1]<TIME_OF_LOGGING_JOINS],nice_time(t[1],'%s/%s'%(jid,nick))[2].split(', GMT',1)[0]) for t in t_age])
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def join_time(type, jid, nick, text):
+def join_time(bot, type, jid, nick, text):
 	if not text: text = nick
-	lvl,r_jid = get_level(jid,text)
+	lvl,r_jid = get_level(bot,jid,text)
 	if lvl != -2:
 		j_time = cur_execute_fetchone('select time from first_join where room=%s and jid=%s;',(jid,getRoom(r_jid)))[0]
 		msg = L('First %s\'s join is %s%s (%s ago)','%s/%s'%(jid,nick)) % (text,['','~'][j_time<TIME_OF_LOGGING_JOINS],nice_time(j_time,'%s/%s'%(jid,nick))[2],un_unix(int(time.time())-j_time,'%s/%s'%(jid,nick)))
 	else: msg = L('Not found!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def true_age_stat(type, jid, nick, text):
+def true_age_stat(bot, type, jid, nick, text):
 	text = text.strip()
 	if text and text.isdigit(): llim = int(text)
 	else:
@@ -65,15 +65,15 @@ def true_age_stat(type, jid, nick, text):
 		tmp = cur_execute_fetchone('select nick from age where room=%s and jid=%s order by status,-time',(jid,t[0]))
 		t_age.append((tmp[0],t[1]))
 	msg = L('Age statistic:\n%s','%s/%s'%(jid,nick)) % '\n'.join(['%s\t%s' % (t[0],un_unix(t[1],'%s/%s'%(jid,nick))) for t in t_age])
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def true_age_split(type, jid, nick, text):
-	true_age_raw(type, jid, nick, text, True)
+def true_age_split(bot, type, jid, nick, text):
+	true_age_raw(bot, type, jid, nick, text, True)
 
-def true_age(type, jid, nick, text):
-	true_age_raw(type, jid, nick, text, None)
+def true_age(bot, type, jid, nick, text):
+	true_age_raw(bot, type, jid, nick, text, None)
 
-def true_age_raw(type, jid, nick, text, xtype):
+def true_age_raw(bot, type, jid, nick, text, xtype):
 	text = text.rstrip().split('\n')
 	llim = 10
 	if len(text) > 1:
@@ -113,15 +113,15 @@ def true_age_raw(type, jid, nick, text, xtype):
 			else: msg += L('Is here: %s','%s/%s'%(jid,nick)) % un_unix(int(time.time() - tmp[3]),'%s/%s'%(jid,nick))
 			if not xtype: msg = msg.replace('\t', ' - ')
 	else: msg = L('Not found!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def seen(type, jid, nick, text):
-	seen_raw(type, jid, nick, text, None)
+def seen(bot, type, jid, nick, text):
+	seen_raw(bot, type, jid, nick, text, None)
 
-def seen_split(type, jid, nick, text):
-	seen_raw(type, jid, nick, text, True)
+def seen_split(bot, type, jid, nick, text):
+	seen_raw(bot, type, jid, nick, text, True)
 
-def seen_raw(type, jid, nick, text, xtype):
+def seen_raw(bot, type, jid, nick, text, xtype):
 	text = text.rstrip().split('\n')
 	llim = GT('age_default_limit')
 	if len(text)>1:
@@ -156,15 +156,15 @@ def seen_raw(type, jid, nick, text, xtype):
 				if '\r' in tmp[7]: msg += ', %s %s' % (L('Client:','%s/%s'%(jid,nick)),' // '.join(tmp[7].split('\r')[-1].split(' // ')[:-1]))
 			else: msg += ' - '+ L('Is here: %s','%s/%s'%(jid,nick)) % un_unix(int(time.time()-tmp[3]),'%s/%s'%(jid,nick))
 	else: msg = L('Not found!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def seenjid(type, jid, nick, text):
-	seenjid_raw(type, jid, nick, text, None)
+def seenjid(bot, type, jid, nick, text):
+	seenjid_raw(bot, type, jid, nick, text, None)
 
-def seenjid_split(type, jid, nick, text):
-	seenjid_raw(type, jid, nick, text, True)
+def seenjid_split(bot, type, jid, nick, text):
+	seenjid_raw(bot, type, jid, nick, text, True)
 
-def seenjid_raw(type, jid, nick, text, xtype):
+def seenjid_raw(bot, type, jid, nick, text, xtype):
 	text = text.rstrip().split('\n')
 	llim = GT('age_default_limit')
 	if len(text)>1:
@@ -204,9 +204,9 @@ def seenjid_raw(type, jid, nick, text, xtype):
 			if not xtype: msg = msg.replace('\t', ' - ')
 	else: msg = L('Not found!','%s/%s'%(jid,nick))
 	if type == 'groupchat' and ztype:
-		send_msg(type, jid, nick, L('Send for you in private','%s/%s'%(jid,nick)))
-		send_msg('chat', jid, nick, msg)
-	else: send_msg(type, jid, nick, msg)
+		send_msg(bot, type, jid, nick, L('Send for you in private','%s/%s'%(jid,nick)))
+		send_msg(bot, 'chat', jid, nick, msg)
+	else: send_msg(bot, type, jid, nick, msg)
 
 global execute
 

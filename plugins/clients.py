@@ -21,7 +21,7 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def clients_stats_old(type, jid, nick, text):
+def clients_stats_old(bot, type, jid, nick, text):
 	text = reduce_spaces_all(text).lower().split()
 	if text:
 		is_short = 'short' in text
@@ -57,9 +57,9 @@ def clients_stats_old(type, jid, nick, text):
 		ns.sort(reverse=True)
 		msg = L('Client statistic:%s','%s/%s'%(jid,nick)) % '\n%s' % '\n'.join(['%s. %s\t- %s' % (ns.index(t)+1,t[1],t[0]) for t in ns[:10]])
 	else: msg = L('Clients statistic not available.','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def clients_stats(type, jid, nick, text):
+def clients_stats(bot, type, jid, nick, text):
 	text2 = text.split(' ')
 	text = text.lower().split(' ')
 	match = '%'
@@ -83,9 +83,9 @@ def clients_stats(type, jid, nick, text):
 						match,cnick = '%%%s%%' % reduce_spaces_all(text.replace(t[1],'')),t[1]
 						break
 			else: cnick = nick
-			cjid = getRoom(get_level(jid,cnick)[1])
+			cjid = getRoom(get_level(bot,jid,cnick)[1])
 			if cjid == 'None':
-				send_msg(type, jid, nick, L('I could be wrong, but %s not is here...','%s/%s'%(jid,nick)) % cnick)
+				send_msg(bot, type, jid, nick, L('I could be wrong, but %s not is here...','%s/%s'%(jid,nick)) % cnick)
 				return
 		elif text: match = '%%%s%%' % reduce_spaces_all(' '.join(text))
 	else: is_short = is_global = is_os = is_user = False
@@ -126,7 +126,7 @@ def clients_stats(type, jid, nick, text):
 			else: msg = L('Client statistic:%s','%s/%s'%(jid,nick)) % '\n%s' % '\n'.join([t[1] for t in ns])
 		else: msg = L('Client statistic:%s','%s/%s'%(jid,nick)) % '\n%s' % '\n'.join(['%s. %s\t- %s' % (ns.index(t)+1,t[1],t[0]) for t in ns[:10]])
 	else: msg = L('Clients statistic not available.','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

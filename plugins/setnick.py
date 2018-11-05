@@ -21,15 +21,15 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def set_nickname(type, jid, nick, text):
-	if get_affiliation(jid,nick) == 'owner' or get_level(jid,nick)[0] == 9:
+def set_nickname(bot, type, jid, nick, text):
+	if get_affiliation(jid,nick) == 'owner' or get_level(bot,jid,nick)[0] >= 9:
 		msg = None
-		nickname = Settings['nickname']
+		nickname = Settings[bot]['options']['nickname']
 		text = '%s/%s' % (jid, text or nickname)
-		bot_join(type, jid, nick, text)
+		bot_join(bot, type, jid, nick, text)
 	else:
 		msg = L('You can\'t do it!','%s/%s'%(jid,nick))
-		send_msg(type, jid, nick, msg)
+		send_msg(bot, type, jid, nick, msg)
 
 global execute
 

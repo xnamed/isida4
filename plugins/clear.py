@@ -21,23 +21,24 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def hidden_clear(type, jid, nick, text):
+def hidden_clear(bot, type, jid, nick, text):
 	try: cntr = int(text)
 	except: cntr = GT('clear_default_count')
 	if cntr > GT('clear_max_count'): cntr = GT('clear_max_count')
 	elif cntr < 2: cntr = 2
 	cdel,cmode = GT('clear_delay'),get_config(getRoom(jid),'clear_answer') == 'presence'
 	clear_msg = L('Clean by %s messages in approximately %s sec.','%s/%s'%(jid,nick)) % (cntr,int(cntr*cdel))
-	if cmode: caps_and_send(xmpp.Presence(jid,show=Settings['status'], status=clear_msg, priority=Settings['priority']))
-	else: send_msg(type, jid, nick, clear_msg)
+	status_show, status_message = gr_status(bot,getRoom(jid),'show','bot_status_show'), gr_status(bot,getRoom(jid),'text','bot_status_message')
+	if cmode: caps_and_send(bot, xmpp.Presence(jid,show=status_show, status=clear_msg, priority=Settings[bot]['status']['priority']))
+	else: send_msg(bot, type, jid, nick, clear_msg)
 	time.sleep(cdel)
 	for tmp in range(0,cntr):
 		msg = xmpp.Message(jid, '', "groupchat")
 		msg.setTag('body')
-		sender(msg)
+		sender(bot,msg)
 		time.sleep(cdel)
-	if cmode: caps_and_send(xmpp.Presence(jid,show=Settings['status'], status=Settings['message'], priority=Settings['priority']))
-	else: send_msg(type, jid, nick, L('Cleaned!','%s/%s'%(jid,nick)))
+	if cmode: caps_and_send(bot, xmpp.Presence(jid,show=status_show, status=status_message, priority=Settings[bot]['status']['priority']))
+	else: send_msg(bot, type, jid, nick, L('Cleaned!','%s/%s'%(jid,nick)))
 
 global execute
 

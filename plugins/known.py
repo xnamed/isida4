@@ -21,7 +21,7 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def known(type, jid, nick, text):
+def known(bot, type, jid, nick, text):
 	count = 10
 	if '\n' in text:
 		try:
@@ -40,7 +40,7 @@ def known(type, jid, nick, text):
 		if text == nick: msg = '%s %s' % (L('I know you as:','%s/%s'%(jid,nick)),nicks)
 		else: msg = '%s %s' % (L('I know %s as:','%s/%s'%(jid,nick)) % text,nicks)
 	else: msg = L('Not found!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

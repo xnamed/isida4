@@ -23,7 +23,7 @@
 
 idle_base = []
 
-def idle(type, jid, nick, text):
+def idle(bot, type, jid, nick, text):
 	global idle_base
 	if not len(text): text = nick
 	msg = L('I can\'t find %s','%s/%s'%(jid,nick)) % text
@@ -34,9 +34,9 @@ def idle(type, jid, nick, text):
 			if tmp[2] == 'm': msg += ' ('+L('message','%s/%s'%(jid,nick))+')'
 			else: msg += ' ('+L('presence','%s/%s'%(jid,nick))+')'
 			break
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def append_to_idle(room,jid,nick,type,text):
+def append_to_idle(bot,room,jid,nick,type,text):
 	global idle_base
 	for tmp in idle_base:
 		if tmp[0] == room and tmp[1] == nick:
@@ -44,7 +44,7 @@ def append_to_idle(room,jid,nick,type,text):
 			break
 	idle_base.append((room,nick,'m',int(time.time())))
 
-def remove_from_idle(room,jid,nick,type,text):
+def remove_from_idle(bot,room,jid,nick,type,text):
 	global idle_base
 	for tmp in idle_base:
 		if tmp[0] == room and tmp[1] == nick:

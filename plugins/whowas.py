@@ -21,7 +21,7 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def whowas(type, jid, nick, text):
+def whowas(bot, type, jid, nick, text):
 	period = int(time.time()-86400)
 	text = '%%%s%%' % text if text else '%'
 	was_here = cur_execute_fetchall('select nick from age where room=%s\
@@ -31,7 +31,7 @@ def whowas(type, jid, nick, text):
 										  group by jid,nick order by nick;',(jid,period,text,text))
 	if was_here: msg = L('For a last day i see: %s','%s/%s'%(jid,nick)) % ', '.join([t[0] for t in was_here])
 	else:msg = L('All who i see for a last day now is here.','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

@@ -60,7 +60,7 @@ def spy_show(rn):
 	msg += L('\nNext scanning across %s',rn) % un_unix(int(GT('scan_time')-(time.time()-spy_stat_time)),rn)
 	return msg
 
-def conf_spy(type, jid, nick,text):
+def conf_spy(bot, type, jid, nick,text):
 	text = text.strip().lower()
 	rn = '%s/%s'%(jid,nick)
 	msg = None
@@ -68,9 +68,9 @@ def conf_spy(type, jid, nick,text):
 	elif text.startswith('del '): msg = spy_del(text[4:],rn)
 	elif text == 'show': msg = spy_show(rn)
 	if not msg: msg = L('Smoke help about command!',rn)
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def spy_message(room,jid,nick,type,text):
+def spy_message(bot,room,jid,nick,type,text):
 	sb = cur_execute_fetchone('select message from spy where room=%s;',(room,))
 	if sb: cur_execute('update spy set message=message+1 where room=%s',(room,))
 
@@ -97,18 +97,21 @@ def spy_action():
 			elif tmp2[0] == 'm' and int(tmp2[1:]) > tmp[3]: mist = tmp2
 			cur_execute('delete from spy where room=%s',(tmp[0],))
 			if mist:
-				if cur_execute_fetchall('select * from conference where room ilike %s;', ('%s/%%'%getRoom(tmp[0]),)):
+				bots = cur_execute_fetchall('select bot from conference where room ilike %s;', ('%s/%%'%getRoom(tmp[0]),))
+				if bots:
 					cur_execute('delete from conference where room ilike %s;', ('%s/%%'%getRoom(tmp[0]),))
-					leave(tmp[0], L('I leave your conference because low activity'))
-					pprint('*** Leave room: %s by spy activity!' % tmp[0],'red')
-					own = cur_execute_fetchall('select * from bot_owner;')
-					if own:
-						for tmpo in own: send_msg('chat', tmpo[0], '', L('I leave conference %s by condition spy plugin: %s') % (tmp[0], mist))
+					for tmpb in bots:
+						if tmpb[0] not in clients.keys(): return
+						leave(tmpb[0], tmp[0], L('I leave your conference because low activity'))
+						pprint('*** Leave room: %s by spy activity!' % tmp[0],'red')
+						own = cur_execute_fetchall('select * from bot_owner where bot=%s;',(tmpb[0]))
+						if own:
+							for tmpo  in own: send_msg(tmpb[0], 'chat', tmpo[0], '', L('I leave conference %s by condition spy plugin: %s') % (tmp[0], mist))
 			else: cur_execute('insert into spy values (%s,%s,%s,%s,%s)',(tmp[0],int(time.time()),tmp[2], 0,tmp[4]))
 
 global execute, timer, message_control
 
-timer = [get_spy_stat, spy_action]
+# timer = [get_spy_stat, spy_action] TODO!
 
 message_control = [spy_message]
 

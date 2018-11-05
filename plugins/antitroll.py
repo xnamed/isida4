@@ -21,7 +21,7 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def troll(type, jid, nick, text):
+def troll(bot, type, jid, nick, text):
 	text = text.split('\n')
 	r = unicode(text[0])
 	try: count = int(text[2])
@@ -33,10 +33,10 @@ def troll(type, jid, nick, text):
 	else: message = L('You troll!','%s/%s'%(jid,nick))
 	tst = GT('troll_sleep_time')
 	while count != 0:
-		sender(xmpp.Message(otake, message, "chat"))
+		sender(bot, xmpp.Message(otake, message, "chat"))
 		time.sleep(tst)
 		count -= 1
-	send_msg(type, jid, nick, L('Done','%s/%s'%(jid,nick)))
+	send_msg(bot, type, jid, nick, L('Done','%s/%s'%(jid,nick)))
 
 global execute, timer
 

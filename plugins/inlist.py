@@ -21,18 +21,18 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def reban(type, jid, nick, text):
+def reban(bot, type, jid, nick, text):
 	try: lim = int(text)
 	except:
-		send_msg(type, jid, nick, L('Error in parameters. Read the help about command.','%s/%s'%(jid,nick)))
+		send_msg(bot, type, jid, nick, L('Error in parameters. Read the help about command.','%s/%s'%(jid,nick)))
 		return
 	global banbase,iq_request
 	iqid = get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(jid)}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'outcast'})])])
-	iq_request[iqid]=(time.time(),reban_async,[type, jid, nick, lim],xmpp.NS_MUC_ADMIN)
-	sender(i)
+	iq_request[iqid]=(time.time(),reban_async,[bot, type, jid, nick, lim],xmpp.NS_MUC_ADMIN)
+	sender(bot,i)
 
-def reban_async(type, jid, nick, lim, iq_stanza):
+def reban_async(bot, type, jid, nick, lim, iq_stanza):
 	isa = iq_stanza[1]
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
 	else:
@@ -52,34 +52,34 @@ def reban_async(type, jid, nick, lim, iq_stanza):
 		nodes = []
 		for t in _new_servers:
 			reason = [xmpp.Node('reason',{},'Rebanned as dangerous! Found jids: %s' % _srv_count[t])]
-			nodes.append(xmpp.Node('item',{'affiliation':'outcast', 'jid':t},reason))
+			nodes.append(bot, xmpp.Node('item',{'affiliation':'outcast', 'jid':t},reason))
 			if len(nodes) >= _limit:
-				sender(xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
+				sender(bot, xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
 				nodes = []
-		if nodes: sender(xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
+		if nodes: sender(bot, xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
 		nodes = []
 		for t in _need_remove:
-			nodes.append(xmpp.Node('item',{'affiliation':'none', 'jid':t},[]))
+			nodes.append(bot, xmpp.Node('item',{'affiliation':'none', 'jid':t},[]))
 			if len(nodes) >= _limit:
-				sender(xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
+				sender(bot, xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
 				nodes = []
-		if nodes: sender(xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
+		if nodes: sender(bot, xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},nodes)]))
 		msg = L('Unbaned jids: %s\nBanned servers: %s .. %s','%s/%s'%(jid,nick)) % (len(_need_remove), len(_new_servers), ', '.join(_new_servers))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def inban(type, jid, nick, text): inlist_raw(type, jid, nick, text, 'outcast', L('Total banned: %s','%s/%s'%(jid,nick)))
-def inowner(type, jid, nick, text): inlist_raw(type, jid, nick, text, 'owner', L('Total owners: %s','%s/%s'%(jid,nick)))
-def inadmin(type, jid, nick, text): inlist_raw(type, jid, nick, text, 'admin', L('Total admins: %s','%s/%s'%(jid,nick)))
-def inmember(type, jid, nick, text): inlist_raw(type, jid, nick, text, 'member', L('Total members: %s','%s/%s'%(jid,nick)))
+def inban(bot, type, jid, nick, text): inlist_raw(bot, type, jid, nick, text, 'outcast', L('Total banned: %s','%s/%s'%(jid,nick)))
+def inowner(bot, type, jid, nick, text): inlist_raw(bot, type, jid, nick, text, 'owner', L('Total owners: %s','%s/%s'%(jid,nick)))
+def inadmin(bot, type, jid, nick, text): inlist_raw(bot, type, jid, nick, text, 'admin', L('Total admins: %s','%s/%s'%(jid,nick)))
+def inmember(bot, type, jid, nick, text): inlist_raw(bot, type, jid, nick, text, 'member', L('Total members: %s','%s/%s'%(jid,nick)))
 
-def inlist_raw(type, jid, nick, text, affil, message):
+def inlist_raw(bot, type, jid, nick, text, affil, message):
 	global banbase,iq_request
 	iqid = get_id()
 	i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(jid)}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':affil})])])
-	iq_request[iqid]=(time.time(),inlist_raw_async,[type, jid, nick, text, message],xmpp.NS_MUC_ADMIN)
-	sender(i)
+	iq_request[iqid]=(time.time(),inlist_raw_async,[bot, type, jid, nick, text, message],xmpp.NS_MUC_ADMIN)
+	sender(bot,i)
 
-def inlist_raw_async(type, jid, nick, text, message, iq_stanza):
+def inlist_raw_async(bot, type, jid, nick, text, message, iq_stanza):
 	isa = iq_stanza[1]
 	if len(isa) >= 2 and isa[1] == 'error': msg = L('Error! %s','%s/%s'%(jid,nick)) % L(isa[0].capitalize().replace('-',' '),'%s/%s'%(jid,nick))
 	else:
@@ -101,7 +101,7 @@ def inlist_raw_async(type, jid, nick, text, message, iq_stanza):
 					cnt += 1
 			if len(mmsg): msg += L('Found:','%s/%s'%(jid,nick)) + ' %s%s' % (mmsg.count('\n'),mmsg)
 			else: msg += L('no matches!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

@@ -21,7 +21,7 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def call_body(type, jid, nick, text):
+def call_body(bot, type, jid, nick, text):
 	skip = 1
 	if len(text):
 		try:
@@ -44,17 +44,17 @@ def call_body(type, jid, nick, text):
 		else: msg = L('I don\'n know %s','%s/%s'%(jid,nick)) % text
 	else: msg = L('What?','%s/%s'%(jid,nick))
 
-	if skip: send_msg(type, jid, nick, msg)
+	if skip: send_msg(bot, type, jid, nick, msg)
 	else:
 		inv_msg = L('%s invite you to %s','%s/%s'%(jid,nick)) % (nick, jid)
 		if reason: inv_msg += ' ' + L('because: %s','%s/%s'%(jid,nick)) % reason
-		send_msg('chat',whojid, '',inv_msg)
+		send_msg(bot, 'chat',whojid, '',inv_msg)
 
 		inv = xmpp.Message(jid)
 		inv.setTag('x', namespace=xmpp.NS_MUC_USER).addChild('invite', {'to':whojid})
-		sender(inv)
+		sender(bot,inv)
 
-		send_msg(type, jid, nick, msg)
+		send_msg(bot, type, jid, nick, msg)
 
 global execute
 

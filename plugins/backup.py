@@ -23,12 +23,12 @@
 
 backup_async = {}
 
-def getMucItems(jid,affil,ns,back_id):
+def getMucItems(bot,jid,affil,ns,back_id):
 	iqid = get_id()
 	if ns == xmpp.NS_MUC_ADMIN: i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(jid)}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':affil})])])
 	else: i = xmpp.Node('iq', {'id': iqid, 'type': 'get', 'to':getRoom(jid)}, payload = [xmpp.Node('query', {'xmlns': ns},[])])
 	iq_request[iqid]=(time.time(),getMucItems_async,[ns,affil,back_id],ns)
-	sender(i)
+	sender(bot,i)
 
 def getMucItems_async(ns,affil,back_id,iq_stanza):
 	global backup_async
@@ -50,7 +50,7 @@ def make_stanzas_array(raw_back,jid,affil):
 		stanza_array.append(i)
 	return stanza_array
 
-def conf_backup(type, jid, nick, text):
+def conf_backup(bot, type, jid, nick, text):
 	global backup_async,conn
 	if len(text):
 		text = text.split(' ')
@@ -65,20 +65,20 @@ def conf_backup(type, jid, nick, text):
 			else: msg = L('Backup copies not found.','%s/%s'%(jid,nick))
 		elif mode == 'now':
 
-			if get_xtype(jid) != 'owner': msg = L('I need an owner affiliation for backup settings!','%s/%s'%(jid,nick))
+			if get_xtype(bot,jid) != 'owner': msg = L('I need an owner affiliation for backup settings!','%s/%s'%(jid,nick))
 			else:
 				back_id = get_id()
 				backup_async[back_id] = {}
-				getMucItems(jid,'outcast',xmpp.NS_MUC_ADMIN,back_id)
-				getMucItems(jid,'member',xmpp.NS_MUC_ADMIN,back_id)
-				getMucItems(jid,'admin',xmpp.NS_MUC_ADMIN,back_id)
-				getMucItems(jid,'owner',xmpp.NS_MUC_ADMIN,back_id)
-				getMucItems(jid,'',xmpp.NS_MUC_OWNER,back_id)
+				getMucItems(bot,jid,'outcast',xmpp.NS_MUC_ADMIN,back_id)
+				getMucItems(bot,jid,'member',xmpp.NS_MUC_ADMIN,back_id)
+				getMucItems(bot,jid,'admin',xmpp.NS_MUC_ADMIN,back_id)
+				getMucItems(bot,jid,'owner',xmpp.NS_MUC_ADMIN,back_id)
+				getMucItems(bot,jid,'',xmpp.NS_MUC_OWNER,back_id)
 				bst = GT('backup_sleep_time')
 				while len(backup_async[back_id]) != 5 and not game_over: time.sleep(bst)
 				iqid = get_id()
 				i = xmpp.Node('iq', {'id': iqid, 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'admin', 'jid':getRoom(str(selfjid))},[])])])
-				sender(i)
+				sender(bot,i)
 				backup_async[back_id]['alias'] = cur_execute_fetchall('select match ,cmd from alias where room=%s',(jid,))
 				backup_async[back_id]['bot_config'] = cur_execute_fetchall('select option ,value from config_conf where room=%s',(jid,))
 				backup_async[back_id]['acl'] = cur_execute_fetchall('select action,type,text,command,time,level from acl where jid=%s',(jid,))
@@ -118,7 +118,7 @@ def conf_backup(type, jid, nick, text):
 						raw_back=json.loads(readfile(back_folder % unicode(text[1])))
 						for tmp in ['outcast','member','admin','owner']:
 							for t in make_stanzas_array(raw_back[tmp],jid,tmp):
-								sender(t)
+								sender(bot,t)
 								time.sleep(bst)
 						i = xmpp.Iq(typ='set',to=jid,xmlns=xmpp.NS_CLIENT)
 						i.setTag('query',namespace=xmpp.NS_MUC_OWNER)
@@ -127,9 +127,9 @@ def conf_backup(type, jid, nick, text):
 							i.getTag('query',namespace=xmpp.NS_MUC_OWNER).getTag('x',namespace=xmpp.NS_DATA).\
 								setTag('field',attrs={'var':tmp[0],'type':tmp[1]}).\
 								setTagData('value',tmp[2])
-						sender(i)
+						sender(bot,i)
 						time.sleep(bst)
-						sender(xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'admin', 'jid':getRoom(unicode(selfjid))},[])])]))
+						sender(bot, xmpp.Node('iq', {'id': get_id(), 'type': 'set', 'to':jid}, payload = [xmpp.Node('query', {'xmlns': xmpp.NS_MUC_ADMIN},[xmpp.Node('item',{'affiliation':'admin', 'jid':getRoom(unicode(selfjid))},[])])]))
 						time.sleep(bst)
 						cur_execute_fetchall('delete from config_conf where room=%s',(jid,))
 						for tmp in raw_back['bot_config']: cur_execute('insert into config_conf (room, option ,value) values (%s,%s,%s)',(jid,tmp[0],tmp[1]))
@@ -159,7 +159,7 @@ def conf_backup(type, jid, nick, text):
 			else: msg = L('What do you want to restore?','%s/%s'%(jid,nick))
 		else: msg = L('Unknown item!','%s/%s'%(jid,nick))
 	else: msg = 'backup now|show|restore'
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

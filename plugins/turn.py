@@ -47,15 +47,15 @@ def turner_raw(text,jid,nick):
 		return msg
 	else: return None
 
-def turner(type, jid, nick, text):
+def turner(bot, type, jid, nick, text):
 	if not text and type != 'groupchat':
-		send_msg(type, jid, nick, L('Not allowed in private!','%s/%s'%(jid,nick)))
+		send_msg(bot, type, jid, nick, L('Not allowed in private!','%s/%s'%(jid,nick)))
 		return
 	to_turn = turner_raw(text,jid,nick)
-	if to_turn: send_msg(type, jid, [nick,''][type=='groupchat'], to_turn)
-	else: send_msg(type, jid, nick, L('What?','%s/%s'%(jid,nick)))
+	if to_turn: send_msg(bot, type, jid, [nick,''][type=='groupchat'], to_turn)
+	else: send_msg(bot, type, jid, nick, L('What?','%s/%s'%(jid,nick)))
 
-def append_to_turner(room,jid,nick,type,text):
+def append_to_turner(bot,room,jid,nick,type,text):
 	global turn_base
 	for tmp in turn_base:
 		if tmp[0] == room and tmp[1] == nick:
@@ -64,7 +64,7 @@ def append_to_turner(room,jid,nick,type,text):
 			break
 	turn_base.append((room,nick,text))
 
-def remove_from_turner(room,jid,nick,type,text):
+def remove_from_turner(bot,room,jid,nick,type,text):
 	global turn_base
 	if type == 'unavailable':
 		for tmp in turn_base:
@@ -73,10 +73,10 @@ def remove_from_turner(room,jid,nick,type,text):
 				except: pass
 				break
 
-def autoturn(room,jid,nick,type,text):
+def autoturn(bot,room,jid,nick,type,text):
 	if get_config(room,'autoturn') and type == 'groupchat':
 		if cur_execute_fetchone('select * from commonoff where room=%s and cmd=%s',(room,'turn')): return
-		nowname = get_xnick(room)
+		nowname = get_xnick(bot,room)
 		if nick == nowname: return
 		text = re.sub('^%s[,:]\ ' % re.escape(nowname), '', text.strip())
 		tmp = text.lower()
@@ -89,7 +89,7 @@ def autoturn(room,jid,nick,type,text):
 				to_turn = turner_raw(text,room,nick)
 				if to_turn and to_turn != text:
 					pprint('Autoturn text: %s/%s [%s] %s > %s' % (room,nick,jid,text,to_turn),'dark_gray')
-					send_msg(type, room, '', to_turn)
+					send_msg(bot, type, room, '', to_turn)
 				return True
 
 global execute, message_act_control

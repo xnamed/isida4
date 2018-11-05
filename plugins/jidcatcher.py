@@ -23,7 +23,7 @@
 
 JIDCATCHER_DEFAULT_LIMIT = 10
 
-def info_search(type, jid, nick, text):
+def info_search(bot, type, jid, nick, text):
 	msg = L('What I must find?','%s/%s'%(jid,nick))
 	if text:
 		if '\n' in text:
@@ -38,9 +38,9 @@ def info_search(type, jid, nick, text):
 		tma = cur_execute_fetchall('select * from jid where login ilike %s or server ilike %s or resourse ilike %s order by login limit %s',(ttext,ttext,ttext,lim))
 		if tma: msg = '%s\n%s' % (L('Found:','%s/%s'%(jid,nick)),'\n'.join(['%s. %s@%s/%s' % tuple([tma.index(tt)+1]+list(tt)) for tt in tma]))
 		else: msg = L('\'%s\' not found!','%s/%s'%(jid,nick)) % text
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def info_res(type, jid, nick, text):
+def info_res(bot, type, jid, nick, text):
 	cur_execute('delete from jid where server ilike %s',('<temporary>%',))
 	if text.lower() == 'count':
 		tlen = cur_execute_fetchall('select count(*) from (select resourse,count(*) from jid group by resourse) tmp;')[0][0]
@@ -54,9 +54,9 @@ def info_res(type, jid, nick, text):
 		if text: msg = L('Found resources: %s','%s/%s'%(jid,nick)) % tlen
 		else: msg = L('Total resources: %s','%s/%s'%(jid,nick)) % tlen
 		if jidbase: msg += '\n%s' % '\n'.join(['%s. %s\t%s' % tuple([jidbase.index(jj)+1]+list(jj)) for jj in jidbase])
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def info_serv(type, jid, nick, text):
+def info_serv(bot, type, jid, nick, text):
 	cur_execute('delete from jid where server ilike %s',('<temporary>%',))
 
 	if '\n' in text:
@@ -85,19 +85,19 @@ def info_serv(type, jid, nick, text):
 		if text: msg = L('Found servers: %s','%s/%s'%(jid,nick)) % tlen
 		else: msg = L('Total servers: %s','%s/%s'%(jid,nick)) % tlen
 		if jidbase: msg = '%s\n%s' %(msg,'\n'.join(['%s. %s [%s]' % (int(jj[0]),jj[1],jj[2]) for jj in jidbase]))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 #room number date
 
-def info_top(type, jid, nick, text):
+def info_top(bot, type, jid, nick, text):
 	if text: room = text
 	else: room = getRoom(jid)
 	cnf = cur_execute_fetchone('select count ,time from top where room=%s',(room,))
 	if cnf: msg = L('Max count of members: %s %s','%s/%s'%(jid,nick)) % (cnf[0], '(%s)' % disp_time(cnf[1],'%s/%s'%(jid,nick)))
 	else: msg = L('Statistic not found!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def jidcatcher_presence(room,jid,nick,type,text):
+def jidcatcher_presence(bot,room,jid,nick,type,text):
 	if jid != 'None' and not jid.startswith('<temporary>'):
 		tmp = (getName(jid),getServer(jid),getResourse(jid))
 		try:

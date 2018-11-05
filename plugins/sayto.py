@@ -23,14 +23,14 @@
 
 last_cleanup_sayto_base = 0
 
-def sayto(type, jid, nick, text):
+def sayto(bot, type, jid, nick, text):
 	while len(text) and text[0] == '\n': text=text[1:]
 	while len(text) and (text[-1] == '\n' or text[-1] == ' '): text=text[:-1]
 
 	if text.split(' ')[0] == 'show':
 		try: text = text.split(' ',1)[1]
 		except: text = ''
-		ga = get_level(jid, nick)
+		ga = get_level(bot, jid, nick)
 		if ga[0] != 9: msg = L('You access level is to low!','%s/%s'%(jid,nick))
 		else:
 			cm = cur_execute_fetchall('select * from sayto')
@@ -44,7 +44,7 @@ def sayto(type, jid, nick, text):
 				if len(msg): msg = L('Not transfered messages: %s','%s/%s'%(jid,nick)) % msg
 				else: msg = L('Not found!','%s/%s'%(jid,nick))
 				if type == 'groupchat':
-					send_msg('chat', jid, nick, msg)
+					send_msg(bot, 'chat', jid, nick, msg)
 					msg = L('Sent in private message','%s/%s'%(jid,nick))
 			else: msg = L('List is empty.','%s/%s'%(jid,nick))
 	elif ' ' in text or '\n' in text:
@@ -82,12 +82,12 @@ def sayto(type, jid, nick, text):
 					cur_execute('insert into sayto values (%s,%s,%s,%s)', (frm, jid, to, what))
 			else: msg = L('I didn\'t see user with nick %s. You can use jid.','%s/%s'%(jid,nick)) % to
 	else: msg = L('What convey to?','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def say_memo(type, jid, nick, text):
+def say_memo(bot, type, jid, nick, text):
 	while len(text) and text[0] == '\n': text=text[1:]
 	while len(text) and (text[-1] == '\n' or text[-1] == ' '): text=text[:-1]
-	gj = getRoom(get_level(jid, nick)[1])
+	gj = getRoom(get_level(bot, jid, nick)[1])
 	if text.split(' ')[0] == 'show':
 		try: text = text.split(' ',1)[1]
 		except: text = ''
@@ -98,9 +98,9 @@ def say_memo(type, jid, nick, text):
 		cur_execute('insert into sayto values (%s,%s,%s,%s)', ('\n%s' % int(time.time()), jid, gj, text))
 		msg = L('I\'ll remember it to you.','%s/%s'%(jid,nick))
 	else: msg = L('What remember to you?','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
-def sayto_presence(room,jid,nick,type,text):
+def sayto_presence(bot,room,jid,nick,type,text):
 	global conn
 	if nick != '' and type != 'unavailable':
 		cm = cur_execute_fetchall('select * from sayto where room=%s and (jid=%s or jid=%s)',(room, getRoom(jid), nick))
@@ -112,7 +112,7 @@ def sayto_presence(room,jid,nick,type,text):
 					if zz[0]: msg = L('%s (%s ago) convey for you: %s','%s/%s'%(room,nick)) % (zz[0], un_unix(time.time()-int(zz[1]),'%s/%s'%(room,nick)), cc[3])
 					else: msg = L('You ask remember: %s','%s/%s'%(room,nick)) % cc[3]
 				else: msg = L('%s convey for you: %s','%s/%s'%(room,nick)) % (cc[3], cc[0])
-				send_msg('chat', room, nick, msg)
+				send_msg(bot, 'chat', room, nick, msg)
 
 def cleanup_sayto_base():
 	global last_cleanup_sayto_base
@@ -127,18 +127,18 @@ def cleanup_sayto_base():
 					if ctime-tim > GT('sayto_timeout'): cur_execute('delete from sayto where room=%s and jid=%s',(cc[1], cc[2]))
 				else: cur_execute('delete from sayto where room=%s and jid=%s',(cc[1], cc[2]))
 
-def sayjid(type, jid, nick, text):
+def sayjid(bot, type, jid, nick, text):
 	try:
 		text = text.split(' ',1)
 		if len(text) != 2: msg = L('Error!','%s/%s'%(jid,nick))
 		elif '@' not in text[0] and '@' not in text[0]: msg = L('Error!','%s/%s'%(jid,nick))
 		elif not len(text[1]): msg = L('Error!','%s/%s'%(jid,nick))
 		else:
-			send_msg(type, jid, nick, L('Sent','%s/%s'%(jid,nick)))
+			send_msg(bot, type, jid, nick, L('Sent','%s/%s'%(jid,nick)))
 			msg = L('%s from conference %s convey message for you: %s','%s/%s'%(jid,nick)) % (nick, jid, text[1])
 			type, nick, jid = 'chat', '', text[0]
 	except: msg = L('Error!','%s/%s'%(jid,nick))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute, timer, presence_control
 

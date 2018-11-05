@@ -21,13 +21,13 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def to_private(type, room, nick, text): raw_redirect('chat', room, nick, text)
+def to_private(bot, type, room, nick, text): raw_redirect(bot, 'chat', room, nick, text)
 
-def to_public(type, room, nick, text): raw_redirect('groupchat', room, nick, text)
+def to_public(bot, type, room, nick, text): raw_redirect(bot, 'groupchat', room, nick, text)
 
-def raw_redirect(type, room, nick, text):
-	access_mode,jid = get_level(room,nick)
-	com_parser(access_mode, get_xnick(room), type, room, nick, text, jid)
+def raw_redirect(bot, type, room, nick, text):
+	access_mode,jid = get_level(bot,room,nick)
+	com_parser(bot, access_mode, get_xnick(bot,room), type, room, nick, text, jid)
 
 global execute
 

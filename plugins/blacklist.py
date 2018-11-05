@@ -21,16 +21,16 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def leave_room(rjid, reason):
+def leave_room(bot, rjid, reason):
 	msg = ''
-	cnf = cur_execute_fetchone('select room from conference where room ilike %s',('%s/%%'%rjid,))
+	cnf = cur_execute_fetchone('select room from conference where bot=%s and room ilike %s',(bot,'%s/%%'%rjid,))
 	if cnf:
-		cur_execute('delete from conference where room ilike %s;', ('%s/%%'%rjid,))
-		leave(rjid, reason)
+		cur_execute('delete from conference where bot=%s and room ilike %s;', (bot,'%s/%%'%rjid,))
+		leave(bot, rjid, reason)
 		msg = L('Leave conference %s\n') % rjid
 	return msg
 
-def blacklist(type, jid, nick, text):
+def blacklist(bot, type, jid, nick, text):
 	text, msg = unicode(text.lower()), ''
 	reason = L('Conference was added in blacklist','%s/%s'%(jid,nick))
 
@@ -50,7 +50,7 @@ def blacklist(type, jid, nick, text):
 		elif cur_execute_fetchone('select count(*) from conference;')[0]==1 and getRoom(cur_execute_fetchone('select room from conference;')[0]) == room:
 			msg =L('You can\'t add last conference in blacklist.','%s/%s'%(jid,nick))
 		else:
-			msg = leave_room(room, reason)
+			msg = leave_room(bot, room, reason)
 			cur_execute('insert into blacklist values (%s)', (room,))
 			msg += L('Add to blacklist: %s','%s/%s'%(jid,nick)) % room
 	elif room and cmd == 'del':
@@ -60,7 +60,7 @@ def blacklist(type, jid, nick, text):
 		else: msg = L('Address not in blacklist.','%s/%s'%(jid,nick))
 	else: msg = L('Error in parameters. Read the help about command.','%s/%s'%(jid,nick))
 
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

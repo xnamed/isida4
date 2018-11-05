@@ -21,15 +21,15 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def private_paste(type, jid, nick, text):
+def private_paste(bot, type, jid, nick, text):
 	if type == 'groupchat': msg = L('This command available only in private!','%s/%s'%(jid,nick))
-	else: msg = paste_text(text,jid,get_level(jid,nick)[1])
-	send_msg(type, jid, nick, msg)
+	else: msg = paste_text(text,jid,get_level(bot,jid,nick)[1])
+	send_msg(bot, type, jid, nick, msg)
 
-def public_paste(type, jid, nick, text):
+def public_paste(bot, type, jid, nick, text):
 	if type == 'groupchat': msg = L('This command available only in private!','%s/%s'%(jid,nick))
-	else: msg,type,nick = L('%s pasted by %s','%s/%s'%(jid,nick)) % (paste_text(text,jid,get_level(jid,nick)[1]),nick),'groupchat',''
-	send_msg(type, jid, nick, msg)
+	else: msg,type,nick = L('%s pasted by %s','%s/%s'%(jid,nick)) % (paste_text(text,jid,get_level(bot,jid,nick)[1]),nick),'groupchat',''
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 

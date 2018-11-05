@@ -21,10 +21,10 @@
 #                                                                             #
 # --------------------------------------------------------------------------- #
 
-def muc_here(type, jid, nick):
+def muc_here(bot, type, jid, nick):
 	users = non_case_sort([t[1] for t in megabase if t[0]==jid])
 	msg = L('I see %s participant(s): %s','%s/%s'%(jid,nick)) % (len(users), ', '.join(users))
-	send_msg(type, jid, nick, msg)
+	send_msg(bot, type, jid, nick, msg)
 
 global execute
 
