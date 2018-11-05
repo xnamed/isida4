@@ -609,6 +609,13 @@ def os_version():
 	else: isidaOs = 'unknown'
 	return isidaOs
 
+#	<<	xnamed	<<	#
+def gr_status(xmpp_jid,gr,st,conf):
+	status = get_config(gr,conf)
+	if status == '': status = Settings[xmpp_jid]['status'][st]
+	return status
+#	>>	xnamed	>>	#
+
 def caps_and_send(xmpp_jid, tmp):
 	xmpp_jid = getRoom(xmpp_jid)
 	tmp.setTag('x', namespace=xmpp.NS_VCARD_UPDATE)
@@ -622,23 +629,15 @@ def join(xmpp_jid,conference,passwd):
 	gr = getRoom(conference)
 
 	current_join[conference] = id
-	#	<<	xnamed	<<	#
-	xmpp_jid = getRoom(xmpp_jid)
-	cbot = getRoom(xmpp_jid)
-	status_show, status_message = get_config(gr,'bot_status_show'), get_config(gr,'bot_status_message')
-	if status_show == '': status_show = Settings[cbot]['status']['show']
-	if status_message == '': status_message = Settings[cbot]['status']['text']
+	status_show, status_message = gr_status(xmpp_jid,gr,'show','bot_status_show'), gr_status(xmpp_jid,gr,'text','bot_status_message')
 	if status_show == 'online': j = xmpp.Node('presence', {'id': id, 'to': conference}, payload = [xmpp.Node('status', {},[status_message]),\
-																										  xmpp.Node('priority', {},[Settings[cbot]['status']['priority']])])
+																										  xmpp.Node('priority', {},[Settings[xmpp_jid]['status']['priority']])])
 	else: j = xmpp.Node('presence', {'id': id, 'to': conference}, payload = [xmpp.Node('show', {},[status_show]),\
 																		xmpp.Node('status', {},[status_message]),\
-																		xmpp.Node('priority', {},[Settings[cbot]['status']['priority']])])
-	#	>>	xnamed	>>	#
+																		xmpp.Node('priority', {},[Settings[xmpp_jid]['status']['priority']])])
 	j.setTag('x', namespace=xmpp.NS_MUC).addChild('history', {'maxchars':'0', 'maxstanzas':'0'})
 	j.getTag('x').setTagData('password', passwd)
-	#	<<	xnamed	<<	#
 	caps_and_send(xmpp_jid, j)
-	#	>>	xnamed	>>	#
 	answered, Error, join_timeout = None, None, 3
 	if is_start: join_timeout_delay = 0.3
 	else: join_timeout_delay = 1
@@ -976,7 +975,7 @@ def messageCB(sess,mess):
 	if not allow_execute: access_mode = -1
 	nowname = get_xnick(xmpp_jid,room)
 	if '@' not in jid and (jid == 'None' or jid.startswith('j2j.')) and is_owner(xmpp_jid,room): access_mode = 9
-	if type == 'groupchat' and nick != '' and access_mode >= 0 and jid not in ['None',xmpp_jid]: talk_count(room,jid,nick,text)
+	if type == 'groupchat' and nick != '' and access_mode >= 0 and jid not in ['None',clients.keys()]: talk_count(room,jid,nick,text)
 	if nick != '' and nick != None and nick != nowname and len(text)>1 and text != 'None' and text != to_censore(text,room) and access_mode >= 0 and get_config(getRoom(room),'censor'):
 		cens_text = L('Censored!',rn)
 		lvl = get_level(xmpp_jid,room,nick)[0]
@@ -1080,7 +1079,7 @@ def msg_afterwork(mess,xmpp_jid,room,jid,nick,type,back_text,no_comm,access_mode
 
 	for tmp in gmessage: not_alowed_flood = tmp(xmpp_jid,room,jid,nick,type,text) or not_alowed_flood
 	if no_comm:
-		for tmp in gactmessage: not_alowed_flood = not_alowed_flood or tmp(room,jid,nick,type,text)
+		for tmp in gactmessage: not_alowed_flood = not_alowed_flood or tmp(xmpp_jid,room,jid,nick,type,text)
 	if not not_alowed_flood and no_comm and text not in ['None','',' '] and not mess.getSubject():
 		if room != selfjid[xmpp_jid]: is_flood = get_config(getRoom(room),'flood') not in ['off',False]
 		else: is_flood = None
@@ -1752,29 +1751,29 @@ def connect_xmpp_client(xmpp_jid):
 			join_status = '%s %s%%' % (GT('show_loading_by_status_message'),int(join_percent))
 			if GT('show_loading_by_status'):
 				if GT('show_loading_by_status_room'): join_status = '%s [%s]' % (join_status,tocon[0])
-				if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=join_status, priority=bot_config['status']['priority']))
-				else: caps_and_send(xmpp_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=bot_config['status']['priority']))
+				if GT('show_loading_by_status_show') == 'online': caps_and_send(bot_jid, xmpp.Presence(status=join_status, priority=bot_config['status']['priority']))
+				else: caps_and_send(bot_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=bot_config['status']['priority']))
 		baseArg = unicode(tocon[0])
 		if '/' not in baseArg: baseArg += '/%s' % unicode(bot_config['nickname'])
-		zz = join(xmpp_jid, baseArg, tocon[1])
+		zz = join(bot_jid, baseArg, tocon[1])
 		while unicode(zz)[:3] == '409' and not game_over:
 			time.sleep(1)
 			baseArg += '_'
-			zz = join(xmpp_jid, baseArg, tocon[1])
+			zz = join(bot_jid, baseArg, tocon[1])
 		if zz:
 			pprint('-!- Error "%s" while join in to %s' % (zz,baseArg),'red')
 			if GT('show_loading_by_status'):
 				if GT('show_loading_by_status_room'): join_status = L('Error while join in to %s - %s') % (tocon[0],zz)
-				if GT('show_loading_by_status_show') == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=join_status, priority=bot_config['status']['priority']))
-				else: caps_and_send(xmpp_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=bot_config['status']['priority']))
+				if GT('show_loading_by_status_show') == 'online': caps_and_send(bot_jid, xmpp.Presence(status=join_status, priority=bot_config['status']['priority']))
+				else: caps_and_send(bot_jid, xmpp.Presence(show=GT('show_loading_by_status_show'), status=join_status, priority=bot_config['status']['priority']))
 		else: pprint('-<- %s' % baseArg,'bright_green')
 		if game_over: break
 	is_start = plugins_reload = None
 	pprint('Joined','white')
 
 	if GT('show_loading_by_status'):
-		if bot_config['status']['show'] == 'online': caps_and_send(xmpp_jid, xmpp.Presence(status=bot_config['status']['text'], priority=bot_config['status']['priority']))
-		else: caps_and_send(xmpp_jid, xmpp.Presence(show=bot_config['status']['show'], status=bot_config['status']['text'], priority=bot_config['status']['priority']))
+		if bot_config['status']['show'] == 'online': caps_and_send(bot_jid, xmpp.Presence(status=bot_config['status']['text'], priority=bot_config['status']['priority']))
+		else: caps_and_send(bot_jid, xmpp.Presence(show=bot_config['status']['show'], status=bot_config['status']['text'], priority=bot_config['status']['priority']))
 	return (True, None)
 
 lastnick = {}
