@@ -69,8 +69,8 @@ xmpp:
 ###   GENERAL CONFIGURATION FILE ACCOUNT
 
 configuration:
-    - "isida-jabber-bot@server.tld/isida-bot": "./settings/configs/config.yml"
-    - "test@localhost/Home": "./settings/configs/config.yml"
+    "isida-jabber-bot@server.tld/isida-bot": "./settings/configs/config.yml"
+    "test@localhost/Home": "./settings/configs/config.yml"
 
 ##
 ## Bot owner JID
