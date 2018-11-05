@@ -120,7 +120,7 @@ def get_size_human(mt):
 	return '%.2f%s' % (mt,t)
 
 def is_boss(jid): return cur_execute_fetchone('select * from bot_owner where bot=%s and jid=%s',('*',getRoom(jid),)) != None
-def is_owner(bot,jid): return cur_execute_fetchone('select * from bot_owner where bot=%s and jid=%s',(getRoom(bot),getRoom(jid),)) != None
+def is_owner(bot,jid): return cur_execute_fetchone('select * from bot_owner where bot=%s and jid=%s',(bot,getRoom(jid),)) != None
 
 def validate_nick(nick,count):
 		nick = nick.lower()
